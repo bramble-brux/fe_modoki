@@ -127,11 +127,11 @@ struct ContentView: View {
 
                 // ─── Controls ───
                 controlButtons
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 20)
 
                 // ─── Switch mode ───
                 switchButton
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 12)
 
                 // ─── Version ───
                 Text("v1.3.1")
@@ -181,43 +181,34 @@ struct ContentView: View {
     }
 
     private var controlButtons: some View {
-        HStack(spacing: 32) {
-            // Main action: Play / Pause / Stop-Alert
-            Button(action: mainAction) {
-                Circle()
-                    .fill(mainButtonColor)
-                    .frame(width: 100, height: 100)
-                    .overlay(
-                        Image(systemName: mainButtonIcon)
-                            .font(.system(size: 40, weight: .semibold))
-                            .foregroundColor(.white)
-                    )
-            }
-
-            // Reset
-            Button(action: resetTimer) {
-                Circle()
-                    .strokeBorder(Color.gray.opacity(0.5), lineWidth: 2)
-                    .frame(width: 70, height: 70)
-                    .overlay(
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 26))
-                            .foregroundColor(.gray)
-                    )
-            }
-            .disabled(isAlerting)
-            .opacity(isAlerting ? 0.3 : 1)
+        // Single main button: Play / Pause / Stop-Alert
+        Button(action: mainAction) {
+            Circle()
+                .fill(mainButtonColor)
+                .frame(width: 100, height: 100)
+                .overlay(
+                    Image(systemName: mainButtonIcon)
+                        .font(.system(size: 40, weight: .semibold))
+                        .foregroundColor(.white)
+                )
         }
     }
 
     private var switchButton: some View {
         Button(action: manualSwitch) {
-            Text("Switch to \(mode.opposite.rawValue)")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 28)
-                .background(Capsule().fill(Color.gray.opacity(0.25)))
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(size: 22, weight: .bold))
+                Text("\(mode.opposite.rawValue) に切替")
+                    .font(.system(size: 18, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 36)
+            .background(
+                Capsule()
+                    .fill(mode.opposite.color.opacity(0.7))
+            )
         }
         .disabled(isAlerting)
         .opacity(isAlerting ? 0.3 : 1)
@@ -257,14 +248,14 @@ struct ContentView: View {
         elapsed = 0
     }
 
-    /// Manual mode switch — records session, switches, resets
+    /// Manual mode switch — records session, switches, auto-starts
     private func manualSwitch() {
         recordSession()
-        isRunning = false
         isAlerting = false
         workAlertFired = false
         mode = mode.opposite
         elapsed = 0
+        isRunning = true  // Auto-start after switching
     }
 
     /// Called when user taps STOP during alert
