@@ -11,8 +11,15 @@ enum TimerMode: String, Codable {
 
     var color: Color {
         switch self {
-        case .work: return .red
-        case .free: return .green
+        case .work: return .indigo
+        case .free: return .mint
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .work: return "laptopcomputer"
+        case .free: return "gamecontroller.fill"
         }
     }
 
@@ -163,28 +170,22 @@ struct ContentView: View {
     /// Idle: choose which mode to start
     private var idleView: some View {
         HStack(spacing: 32) {
-            Button { beginWith(.work) } label: {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 40, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 110, height: 110)
-                    .background(Circle().fill(TimerMode.work.color.opacity(0.8)))
-                    .overlay(
-                        Text("Work").font(.caption2.bold()).foregroundColor(.white)
-                            .offset(y: 38)
-                    )
+            modeStartButton(.work)
+            modeStartButton(.free)
+        }
+    }
+
+    private func modeStartButton(_ m: TimerMode) -> some View {
+        Button { beginWith(m) } label: {
+            VStack(spacing: 8) {
+                Image(systemName: m.icon)
+                    .font(.system(size: 36))
+                Text(m.rawValue)
+                    .font(.system(size: 13, weight: .semibold))
             }
-            Button { beginWith(.free) } label: {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 40, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 110, height: 110)
-                    .background(Circle().fill(TimerMode.free.color.opacity(0.8)))
-                    .overlay(
-                        Text("Free").font(.caption2.bold()).foregroundColor(.white)
-                            .offset(y: 38)
-                    )
-            }
+            .foregroundColor(.white)
+            .frame(width: 110, height: 110)
+            .background(Circle().fill(m.color))
         }
     }
 
@@ -217,11 +218,14 @@ struct ContentView: View {
 
             Spacer().frame(height: 60)
 
-            // Tiny finish button — intentionally small and inconspicuous
+            // Finish button — small but readable
             Button(action: finishSession) {
                 Text("終了")
-                    .font(.system(size: 12))
-                    .foregroundColor(.gray.opacity(0.4))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.gray.opacity(0.6))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .background(Capsule().stroke(Color.gray.opacity(0.3), lineWidth: 1))
             }
         }
     }
