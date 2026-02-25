@@ -22,7 +22,9 @@ enum TimerMode {
 struct ContentView: View {
     @State private var mode: TimerMode = .work
     @State private var workMinutes: Int = 15
+    @State private var workSeconds: Int = 0
     @State private var freeMinutes: Int = 15
+    @State private var freeSeconds: Int = 0
     @State private var secondsRemaining: Int = 15 * 60
     @State private var isActive = false
     @State private var showingAlert = false
@@ -90,9 +92,15 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView(workMinutes: $workMinutes, freeMinutes: $freeMinutes, onSave: {
-                resetTimer()
-            })
+            SettingsView(
+                workMinutes: $workMinutes,
+                workSeconds: $workSeconds,
+                freeMinutes: $freeMinutes,
+                freeSeconds: $freeSeconds,
+                onSave: {
+                    resetTimer()
+                }
+            )
         }
         .alert("Free Time Ended", isPresented: $showingAlert) {
             Button("Start Working", role: .cancel) {
@@ -146,28 +154,42 @@ struct ContentView: View {
 
     private func resetTimer() {
         isActive = false
-        secondsRemaining = (mode == .work ? workMinutes : freeMinutes) * 60
+        secondsRemaining = getInitialSeconds(for: mode)
     }
 
     private func switchMode(to newMode: TimerMode) {
         isActive = false
         mode = newMode
-        secondsRemaining = (mode == .work ? workMinutes : freeMinutes) * 60
+        secondsRemaining = getInitialSeconds(for: mode)
+    }
+
+    private func getInitialSeconds(for mode: TimerMode) -> Int {
+        switch mode {
+        case .work: return (workMinutes * 60) + workSeconds
+        case .free: return (freeMinutes * 60) + freeSeconds
+        }
     }
 }
 
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var workMinutes: Int
+    @Binding var workSeconds: Int
     @Binding var freeMinutes: Int
+    @Binding var freeSeconds: Int
     var onSave: () -> Void
 
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Durations (Minutes)")) {
-                    Stepper("Work: \(workMinutes) min", value: $workMinutes, in: 1...120)
-                    Stepper("Free: \(freeMinutes) min", value: $freeMinutes, in: 1...120)
+                Section(header: Text("Work Duration")) {
+                    Stepper("Minutes: \(workMinutes)", value: $workMinutes, in: 0...120)
+                    Stepper("Seconds: \(workSeconds)", value: $workSeconds, in: 0...59)
+                }
+                
+                Section(header: Text("Free Duration")) {
+                    Stepper("Minutes: \(freeMinutes)", value: $freeMinutes, in: 0...120)
+                    Stepper("Seconds: \(freeSeconds)", value: $freeSeconds, in: 0...59)
                 }
             }
             .navigationTitle("Settings")
