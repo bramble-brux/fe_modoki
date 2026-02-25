@@ -204,7 +204,7 @@ struct ContentView: View {
             // Timer
             Text(formatTime(elapsed))
                 .font(.system(size: 90, weight: .thin, design: .monospaced))
-                .foregroundColor(isOvertime ? .green : .white)
+                .foregroundColor(isOvertime ? Color(red: 0.3, green: 1.0, blue: 0.5) : .white)
                 .padding(.vertical, 16)
 
             Spacer().frame(height: 40)
@@ -279,11 +279,11 @@ struct ContentView: View {
             if isActive {
                 Button(action: finishSession) {
                     Text("終了")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.gray)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                        .background(Capsule().stroke(Color.gray.opacity(0.4), lineWidth: 1))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Color.gray.opacity(0.3)))
                 }
             }
             Spacer()
