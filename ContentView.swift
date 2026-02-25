@@ -21,7 +21,7 @@ enum TimerMode {
 
 struct ContentView: View {
     @State private var mode: TimerMode = .work
-    @State private var secondsRemaining: Int = 15 * 60
+    @State private var secondsRemaining: Int = 10
     @State private var isActive = false
     @State private var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -114,13 +114,13 @@ struct ContentView: View {
 
     private func resetTimer() {
         isActive = false
-        secondsRemaining = 15 * 60
+        secondsRemaining = 10
     }
 
     private func switchMode() {
         isActive = false
         mode = (mode == .work ? .free : .work)
-        secondsRemaining = 15 * 60
+        secondsRemaining = 10
     }
 }
 
