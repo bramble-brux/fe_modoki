@@ -18,7 +18,7 @@ enum TimerMode: String, Codable {
 
     var icon: String {
         switch self {
-        case .work: return "laptopcomputer"
+        case .work: return "dumbbell.fill"
         case .free: return "gamecontroller.fill"
         }
     }
