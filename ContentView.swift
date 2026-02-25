@@ -129,6 +129,18 @@ struct ContentView: View {
         return .white
     }
 
+    /// What to show on the timer display
+    private var displayTime: String {
+        if isOvertime {
+            // Work overtime: show how much past target
+            return formatTime(elapsed - target)
+        } else {
+            // Countdown: show remaining
+            let remaining = max(target - elapsed, 0)
+            return formatTime(remaining)
+        }
+    }
+
     // ── Body ──
     var body: some View {
         ZStack {
@@ -211,7 +223,7 @@ struct ContentView: View {
                 .foregroundColor(activeDisplayColor)
 
             // Timer
-            Text(formatTime(elapsed))
+            Text(displayTime)
                 .font(.system(size: 90, weight: .thin, design: .monospaced))
                 .foregroundColor(activeDisplayColor)
                 .padding(.vertical, 16)
