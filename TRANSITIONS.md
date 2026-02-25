@@ -3,34 +3,22 @@
 修正された要件に基づいた、タイマーの状態遷移図です。
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Work_Counting
+graph TD
+    Start((開始)) --> Work[仕事モード: カウントアップ]
+    Work -->|設定時間超過| WorkExt[仕事モード: 延長中]
     
-    state Work_Counting {
-        [*] --> Work_Normal: 開始
-        Work_Normal --> Work_Extended: 設定時間超過
-        Work_Normal --> [*]: モード切替
-        Work_Extended --> [*]: モード切替
-    }
+    Work -->|手動切替| Free[自由モード: カウントアップ]
+    WorkExt -->|手動切替| Free
     
-    Work_Counting --> Free_Counting: モード切替ボタン
+    Free -->|設定時間到達| Alert{アラート鳴動}
+    Alert -->|停止ボタン押下| WorkAuto[仕事モード: 自動開始]
     
-    state Free_Counting {
-        [*] --> Free_Running: 開始
-        Free_Running --> Free_Alert: 設定時間到達
-        Free_Alert --> Free_Alert: アラート鳴動継続
-        Free_Alert --> [*]: 停止ボタン押下
-    }
+    WorkAuto --> Work
     
-    Free_Counting --> Work_Counting: アラート停止後 (自動移行)
-    
-    state Settings {
-        [*] --> Editing
-        Editing --> [*]: 保存して閉じる
-    }
-    
-    Work_Counting --> Settings: ギアボタン
-    Free_Counting --> Settings: ギアボタン
+    subgraph 設定変更
+        Gear((ギアアイコン)) --> Settings[設定画面]
+        Settings -->|保存| Start
+    end
 ```
 
 ## 主要な遷移の解説
