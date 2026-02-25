@@ -232,12 +232,7 @@ struct ContentView: View {
                 .foregroundColor(.white)
 
             VStack(spacing: 12) {
-                summaryRow(label: "Work", seconds: totalWorkSeconds, color: .red)
-                summaryRow(label: "Free", seconds: totalFreeSeconds, color: .green)
-
-                Divider().background(Color.gray)
-
-                summaryRow(label: "合計", seconds: totalWorkSeconds + totalFreeSeconds, color: .white)
+                summaryRow(label: "Work", seconds: totalWorkSeconds, color: .indigo)
             }
             .padding(24)
             .background(
