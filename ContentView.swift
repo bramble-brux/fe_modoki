@@ -61,13 +61,14 @@ extension Array: @retroactive RawRepresentable where Element: Codable {
 }
 
 // ──────────────────────────────────────────────
-// MARK: - App State
+// MARK: - App Phase
 // ──────────────────────────────────────────────
 
-/// Two possible phases of the timer
-enum TimerPhase {
-    case running    // Counting up
-    case alerting   // Free target reached, alarm ringing
+enum AppPhase {
+    case idle       // Before start
+    case running    // Timer counting
+    case alerting   // Free target reached
+    case finished   // Session complete, showing summary
 }
 
 // ──────────────────────────────────────────────
@@ -87,8 +88,13 @@ struct ContentView: View {
     // ── Runtime state ──
     @State private var mode: TimerMode     = .work
     @State private var elapsed: Int        = 0
-    @State private var phase: TimerPhase   = .running
+    @State private var phase: AppPhase     = .idle
     @State private var workAlertFired      = false
+
+    // ── Session aggregation ──
+    @State private var sessionStartTime: Date = Date()
+    @State private var totalWorkSeconds: Int  = 0
+    @State private var totalFreeSeconds: Int  = 0
 
     // ── Sheet toggles ──
     @State private var showSettings = false
@@ -96,7 +102,6 @@ struct ContentView: View {
 
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    // ── Computed ──
     private var target: Int {
         mode == .work
             ? workMinutes * 60 + workSeconds
@@ -119,25 +124,20 @@ struct ContentView: View {
 
                 Spacer()
 
-                // ─── Mode label ───
-                Text(mode.rawValue)
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .foregroundColor(mode.color)
-
-                // ─── Timer display ───
-                Text(formatTime(elapsed))
-                    .font(.system(size: 90, weight: .thin, design: .monospaced))
-                    .foregroundColor(isOvertime ? .orange : .white)
-                    .padding(.vertical, 16)
+                // ─── Main content (phase-dependent) ───
+                switch phase {
+                case .idle:
+                    idleView
+                case .running, .alerting:
+                    activeView
+                case .finished:
+                    finishedView
+                }
 
                 Spacer()
 
-                // ─── The ONE control area ───
-                controlArea
-                    .padding(.bottom, 32)
-
                 // ─── Version ───
-                Text("v1.5.0")
+                Text("v1.6.0")
                     .font(.caption2)
                     .foregroundColor(.gray.opacity(0.4))
                     .padding(.bottom, 8)
@@ -147,8 +147,7 @@ struct ContentView: View {
             SettingsView(
                 workMin: $workMinutes, workSec: $workSeconds,
                 freeMin: $freeMinutes, freeSec: $freeSeconds,
-                alertInWork: $alertInWork,
-                onDone: { elapsed = 0; phase = .running }
+                alertInWork: $alertInWork
             )
         }
         .sheet(isPresented: $showHistory) {
@@ -158,7 +157,106 @@ struct ContentView: View {
     }
 
     // ──────────────────────────────────────────
-    // MARK: - Sub-views
+    // MARK: - Phase Views
+    // ──────────────────────────────────────────
+
+    /// Idle: just a START button
+    private var idleView: some View {
+        Button(action: startSession) {
+            Image(systemName: "play.fill")
+                .font(.system(size: 50, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 140, height: 140)
+                .background(Circle().fill(Color.blue))
+        }
+    }
+
+    /// Active: mode label, timer, STOP button, tiny finish link
+    private var activeView: some View {
+        VStack(spacing: 0) {
+            // Mode label
+            Text(mode.rawValue)
+                .font(.system(size: 42, weight: .bold, design: .rounded))
+                .foregroundColor(mode.color)
+
+            // Timer
+            Text(formatTime(elapsed))
+                .font(.system(size: 90, weight: .thin, design: .monospaced))
+                .foregroundColor(isOvertime ? .orange : .white)
+                .padding(.vertical, 16)
+
+            Spacer().frame(height: 40)
+
+            // STOP button
+            Button(action: stopAndSwitch) {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 44, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 120, height: 120)
+                    .background(
+                        Circle().fill(phase == .alerting ? Color.red : mode.opposite.color.opacity(0.8))
+                    )
+            }
+
+            Spacer().frame(height: 60)
+
+            // Tiny finish button — intentionally small and inconspicuous
+            Button(action: finishSession) {
+                Text("終了")
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray.opacity(0.4))
+            }
+        }
+    }
+
+    /// Finished: show summary
+    private var finishedView: some View {
+        VStack(spacing: 24) {
+            Text("セッション終了")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+
+            VStack(spacing: 12) {
+                summaryRow(label: "Work", seconds: totalWorkSeconds, color: .red)
+                summaryRow(label: "Free", seconds: totalFreeSeconds, color: .green)
+
+                Divider().background(Color.gray)
+
+                summaryRow(label: "合計", seconds: totalWorkSeconds + totalFreeSeconds, color: .white)
+            }
+            .padding(24)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.gray.opacity(0.15))
+            )
+            .padding(.horizontal, 40)
+
+            Spacer().frame(height: 32)
+
+            Button(action: backToIdle) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 100, height: 100)
+                    .background(Circle().fill(Color.blue))
+            }
+        }
+    }
+
+    private func summaryRow(label: String, seconds: Int, color: Color) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(color)
+            Spacer()
+            Text(formatTime(seconds))
+                .font(.system(size: 20, weight: .medium, design: .monospaced))
+                .foregroundColor(.white)
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // MARK: - Top Bar
     // ──────────────────────────────────────────
 
     private var topBar: some View {
@@ -177,30 +275,46 @@ struct ContentView: View {
         .padding(.top, 12)
     }
 
-    /// Single button — always in the same position, icon only
-    private var controlArea: some View {
-        Button(action: buttonTapped) {
-            Image(systemName: "stop.fill")
-                .font(.system(size: 44, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 120, height: 120)
-                .background(
-                    Circle().fill(phase == .alerting ? Color.red : mode.opposite.color.opacity(0.8))
-                )
-        }
-    }
-
     // ──────────────────────────────────────────
     // MARK: - Actions
     // ──────────────────────────────────────────
 
-    /// Single handler for the one button
-    private func buttonTapped() {
+    private func startSession() {
+        mode = .work
+        elapsed = 0
+        workAlertFired = false
+        totalWorkSeconds = 0
+        totalFreeSeconds = 0
+        sessionStartTime = Date()
+        phase = .running
+    }
+
+    private func stopAndSwitch() {
         recordSession()
+        accumulateTime()
         mode = mode.opposite
         elapsed = 0
         workAlertFired = false
         phase = .running
+    }
+
+    private func finishSession() {
+        recordSession()
+        accumulateTime()
+        phase = .finished
+    }
+
+    private func backToIdle() {
+        phase = .idle
+    }
+
+    private func accumulateTime() {
+        if elapsed > 0 {
+            switch mode {
+            case .work: totalWorkSeconds += elapsed
+            case .free: totalFreeSeconds += elapsed
+            }
+        }
     }
 
     // ──────────────────────────────────────────
@@ -266,7 +380,6 @@ struct SettingsView: View {
     @Binding var freeMin: Int
     @Binding var freeSec: Int
     @Binding var alertInWork: Bool
-    var onDone: () -> Void
 
     var body: some View {
         NavigationView {
@@ -286,7 +399,7 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { onDone(); dismiss() }
+                    Button("Done") { dismiss() }
                 }
             }
         }
