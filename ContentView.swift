@@ -122,6 +122,11 @@ struct ContentView: View {
                 .disabled(isAlerting)
                 
                 Spacer()
+
+                Text("v1.1.0")
+                    .font(.caption)
+                    .foregroundColor(.gray.opacity(0.6))
+                    .padding(.bottom, 10)
             }
         }
         .sheet(isPresented: $showingSettings) {
