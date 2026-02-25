@@ -1,144 +1,126 @@
 import SwiftUI
 
-enum CalcButton: String {
-    case one = "1", two = "2", three = "3", four = "4", five = "5", six = "6", seven = "7", eight = "8", nine = "9", zero = "0"
-    case add = "+", subtract = "-", multiply = "×", divide = "÷", equal = "="
-    case clear = "AC", decimal = ".", percent = "%", negative = "+/-"
+enum TimerMode {
+    case work
+    case free
 
-    var buttonColor: Color {
+    var label: String {
         switch self {
-        case .add, .subtract, .multiply, .divide, .equal:
-            return .orange
-        case .clear, .negative, .percent:
-            return Color(.lightGray)
-        default:
-            return Color(white: 0.3)
+        case .work: return "Work"
+        case .free: return "Free"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .work: return .red
+        case .free: return .green
         }
     }
 }
 
-enum Operation {
-    case add, subtract, multiply, divide, none
-}
-
 struct ContentView: View {
-    @State var value = "0"
-    @State var runningNumber = 0.0
-    @State var currentOperation: Operation = .none
-
-    let buttons: [[CalcButton]] = [
-        [.clear, .negative, .percent, .divide],
-        [.seven, .eight, .nine, .multiply],
-        [.four, .five, .six, .subtract],
-        [.one, .two, .three, .add],
-        [.zero, .decimal, .equal]
-    ]
+    @State private var mode: TimerMode = .work
+    @State private var secondsRemaining: Int = 15 * 60
+    @State private var isActive = false
+    @State private var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
-            VStack {
-                Spacer()
+            VStack(spacing: 40) {
+                Text(mode.label)
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .foregroundColor(mode.color)
 
-                // Text display
-                HStack {
-                    Spacer()
-                    Text(value)
-                        .bold()
-                        .font(.system(size: 100))
-                        .foregroundColor(.white)
-                }
-                .padding()
+                Text(formatTime(secondsRemaining))
+                    .font(.system(size: 80, weight: .medium, design: .monospaced))
+                    .foregroundColor(timeColor)
 
-                // Buttons
-                ForEach(buttons, id: \.self) { row in
-                    HStack(spacing: 12) {
-                        ForEach(row, id: \.self) { item in
-                            Button(action: {
-                                self.didTap(button: item)
-                            }, label: {
-                                Text(item.rawValue)
-                                    .font(.system(size: 32))
-                                    .frame(
-                                        width: self.buttonWidth(item: item),
-                                        height: self.buttonHeight()
-                                    )
-                                    .background(item.buttonColor)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(self.buttonHeight() / 2)
-                            })
-                        }
+                HStack(spacing: 30) {
+                    Button(action: toggleTimer) {
+                        Image(systemName: isActive ? "pause.fill" : "play.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.white)
+                            .frame(width: 100, height: 100)
+                            .background(isActive ? Color.orange : Color.blue)
+                            .clipShape(Circle())
                     }
-                    .padding(.bottom, 3)
+
+                    Button(action: resetTimer) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 40))
+                            .foregroundColor(.white)
+                            .frame(width: 100, height: 100)
+                            .background(Color.gray)
+                            .clipShape(Circle())
+                    }
                 }
+
+                Button(action: switchMode) {
+                    Text("Switch to \(mode == .work ? "Free" : "Work")")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.gray.opacity(0.3))
+                        .cornerRadius(15)
+                }
+                .padding(.horizontal, 40)
             }
         }
-    }
+        .onReceive(timer) { _ in
+            guard isActive else { return }
 
-    func didTap(button: CalcButton) {
-        switch button {
-        case .add, .subtract, .multiply, .divide, .equal:
-            if button == .add {
-                self.currentOperation = .add
-                self.runningNumber = Double(self.value) ?? 0
-            } else if button == .subtract {
-                self.currentOperation = .subtract
-                self.runningNumber = Double(self.value) ?? 0
-            } else if button == .multiply {
-                self.currentOperation = .multiply
-                self.runningNumber = Double(self.value) ?? 0
-            } else if button == .divide {
-                self.currentOperation = .divide
-                self.runningNumber = Double(self.value) ?? 0
-            } else if button == .equal {
-                let runningValue = self.runningNumber
-                let currentValue = Double(self.value) ?? 0
-                switch self.currentOperation {
-                case .add: self.value = formatResult(runningValue + currentValue)
-                case .subtract: self.value = formatResult(runningValue - currentValue)
-                case .multiply: self.value = formatResult(runningValue * currentValue)
-                case .divide: self.value = formatResult(runningValue / currentValue)
-                case .none: break
+            if mode == .free {
+                if secondsRemaining > 0 {
+                    secondsRemaining -= 1
+                } else {
+                    isActive = false
                 }
-            }
-
-            if button != .equal {
-                self.value = "0"
-            }
-        case .clear:
-            self.value = "0"
-            self.runningNumber = 0
-            self.currentOperation = .none
-        case .decimal, .negative, .percent:
-            break
-        default:
-            let number = button.rawValue
-            if self.value == "0" {
-                value = number
             } else {
-                self.value = "\(self.value)\(number)"
+                // Work mode: continues indefinitely
+                secondsRemaining -= 1
             }
         }
     }
 
-    func formatResult(_ result: Double) -> String {
-        if result.truncatingRemainder(dividingBy: 1) == 0 {
-            return String(format: "%.0f", result)
+    private var timeColor: Color {
+        if secondsRemaining < 0 {
+            return .orange // Overtime
+        }
+        return .white
+    }
+
+    private func formatTime(_ totalSeconds: Int) -> String {
+        let isNegative = totalSeconds < 0
+        let seconds = abs(totalSeconds)
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let remSeconds = seconds % 60
+
+        let prefix = isNegative ? "-" : ""
+        if hours > 0 {
+            return String(format: "%@%d:%02d:%02d", prefix, hours, minutes, remSeconds)
         } else {
-            return String(format: "%.2f", result)
+            return String(format: "%@%02d:%02d", prefix, minutes, remSeconds)
         }
     }
 
-    func buttonWidth(item: CalcButton) -> CGFloat {
-        if item == .zero {
-            return ((UIScreen.main.bounds.width - (4 * 12)) / 4) * 2
-        }
-        return (UIScreen.main.bounds.width - (5 * 12)) / 4
+    private func toggleTimer() {
+        isActive.toggle()
     }
 
-    func buttonHeight() -> CGFloat {
-        return (UIScreen.main.bounds.width - (5 * 12)) / 4
+    private func resetTimer() {
+        isActive = false
+        secondsRemaining = 15 * 60
+    }
+
+    private func switchMode() {
+        isActive = false
+        mode = (mode == .work ? .free : .work)
+        secondsRemaining = 15 * 60
     }
 }
 
