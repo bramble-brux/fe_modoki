@@ -1,34 +1,42 @@
-# 状態遷移図 - v1.5.0
+# 状態遷移図 - v1.7.0
 
 ## 遷移図
 
 ```mermaid
 graph TD
-    Start((アプリ起動)) --> WorkRun[Work: カウントアップ中]
+    Start((アプリ起動)) --> Idle[Idle: 開始モード選択]
+    Idle -->|Work選択| WorkRun[Work: カウントダウン中]
+    Idle -->|Free選択| FreeRun[Free: カウントダウン中]
 
-    WorkRun -->|ボタン押下| Record1[セッション記録]
-    Record1 --> FreeRun[Free: カウントアップ中]
+    WorkRun -->|ボタン or 通知操作| Record1[セッション記録]
+    Record1 --> FreeRun
 
-    WorkRun -->|目標到達 & アラートON| WorkBeep[Work: 単発アラート]
-    WorkBeep --> WorkOver[Work: 延長計測中]
-    WorkOver -->|ボタン押下| Record1
+    WorkRun -->|目標到達| WorkOver[Work: 延長計測中 / グリーン]
+    WorkOver -->|ボタン or 通知操作| Record1
 
-    FreeRun -->|目標到達| FreeAlert[Free: アラート鳴動中]
-    FreeAlert -->|ボタン押下 STOP| Record2[セッション記録]
+    FreeRun -->|目標到達| FreeAlert[Free: アラート鳴動中 / 赤]
+    FreeAlert -->|ボタン or 通知操作| Record2[セッション記録]
     Record2 --> WorkRun
+
+    WorkRun -->|終了ボタン| Finish[セッション完了: 合計表示]
+    WorkOver -->|終了ボタン| Finish
+    FreeRun -->|終了ボタン| Finish
+    FreeAlert -->|終了ボタン| Finish
+    
+    Finish -->|続行ボタン| Idle
 ```
 
 ## 状態一覧
 
-| 状態 | モード | カウント | ボタン表示 | アラート |
-|------|--------|----------|-----------|----------|
-| カウントアップ中 | Work | 進行中 | "Free に切替" | なし |
-| 延長計測中 | Work | 進行中（オレンジ） | "Free に切替" | なし |
-| カウントアップ中 | Free | 進行中 | "Work に切替" | なし |
-| アラート鳴動中 | Free | 停止 | "STOP"（赤） | 継続鳴動 |
+| 状態 | モード | 表示 | 色（Text/Icon） | アラート |
+|------|--------|------|-----------------|----------|
+| カウントダウン中 | Work | 残り時間 | 白 | なし |
+| 延長計測中 | Work | 超過時間 | グリーン | 単発(Option) |
+| カウントダウン中 | Free | 残り時間 | 白 | なし |
+| アラート鳴動中 | Free | 0:00 | 赤 | 継続鳴動 |
 
 ## 遷移ルール
 
-1. **ボタン押下時（共通）**: セッションを記録 → 反対モードに切替 → カウントを0にリセット → 自動スタート
-2. **Free目標到達**: カウント停止 → アラート鳴動開始 → ボタンが「STOP」に変化
-3. **Work目標到達**（アラートON時のみ）: 単発音 → そのまま延長計測を継続
+1. **ボタン/通知押下時**: セッションを記録 → 反対モードへ移行 → 自動スタート。
+2. **ロック画面**: 通知アクション「STOP / 次へ」によりアプリを開かずにモード移行可能。
+3. **セッション終了**: 右上の「終了」ボタンで、それまでの Work 合計時間を算出し完了画面へ。

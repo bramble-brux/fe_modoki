@@ -1,5 +1,6 @@
 import SwiftUI
 import AudioToolbox
+import UserNotifications
 
 // ──────────────────────────────────────────────
 // MARK: - Data Models
@@ -79,6 +80,30 @@ enum AppPhase {
 }
 
 // ──────────────────────────────────────────────
+// MARK: - Notification Manager
+// ──────────────────────────────────────────────
+
+class NotificationManager: NSObject, UNUserNotificationCenterDelegate, ObservableObject {
+    @Published var actionReceived: Bool = false
+
+    override init() {
+        super.init()
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        if response.actionIdentifier == "STOP_ACTION" {
+            DispatchQueue.main.async {
+                self.actionReceived = true
+            }
+        }
+        completionHandler()
+    }
+}
+
+// ──────────────────────────────────────────────
 // MARK: - ContentView
 // ──────────────────────────────────────────────
 
@@ -93,6 +118,7 @@ struct ContentView: View {
     @AppStorage("history")      private var history: [SessionRecord] = []
 
     // ── Runtime state ──
+    @StateObject private var notificationManager = NotificationManager()
     @State private var mode: TimerMode     = .work
     @State private var elapsed: Int        = 0
     @State private var phase: AppPhase     = .idle
@@ -125,7 +151,7 @@ struct ContentView: View {
 
     private var activeDisplayColor: Color {
         if mode == .free && phase == .alerting { return .red }
-        if isOvertime { return Color(red: 0.3, green: 1.0, blue: 0.5) }
+        if isOvertime { return .green } // System green is bright and standard
         return .white
     }
 
@@ -166,7 +192,7 @@ struct ContentView: View {
                 Spacer()
 
                 // ─── Version ───
-                Text("v1.6.0")
+                Text("v1.7.1")
                     .font(.caption2)
                     .foregroundColor(.gray.opacity(0.4))
                     .padding(.bottom, 8)
@@ -182,7 +208,14 @@ struct ContentView: View {
         .sheet(isPresented: $showHistory) {
             HistoryView(records: $history)
         }
+        .onAppear(perform: requestNotificationPermission)
         .onReceive(tick) { _ in handleTick() }
+        .onReceive(notificationManager.$actionReceived) { received in
+            if received {
+                stopAndSwitch()
+                notificationManager.actionReceived = false
+            }
+        }
     }
 
     // ──────────────────────────────────────────
@@ -378,11 +411,13 @@ struct ContentView: View {
             if elapsed >= target {
                 elapsed = target
                 phase = .alerting
+                scheduleNotification(title: "Free 終了", body: "Work に切り替えてください")
             }
         case .work:
             if alertInWork && elapsed == target && !workAlertFired {
                 workAlertFired = true
                 playSound()
+                scheduleNotification(title: "Work 目標達成", body: "お疲れ様です！延長も可能です。")
             }
         }
     }
@@ -408,6 +443,36 @@ struct ContentView: View {
 
     private func playSound() {
         AudioServicesPlaySystemSound(1005)
+    }
+
+    // ──────────────────────────────────────────
+    // MARK: - Notifications
+    // ──────────────────────────────────────────
+
+    private func requestNotificationPermission() {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            if granted {
+                setupNotificationActions()
+            }
+        }
+    }
+
+    private func setupNotificationActions() {
+        let stopAction = UNNotificationAction(identifier: "STOP_ACTION", title: "STOP / 次へ", options: [.foreground])
+        let category = UNNotificationCategory(identifier: "TIMER_CATEGORY", actions: [stopAction], intentIdentifiers: [], options: [])
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
+
+    private func scheduleNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.categoryIdentifier = "TIMER_CATEGORY"
+
+        let request = UNNotificationRequest(identifier: "TIMER_ALERT", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 }
 
