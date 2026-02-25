@@ -1,9 +1,12 @@
 import SwiftUI
 import AudioToolbox
 
-// MARK: - Models
+// ──────────────────────────────────────────────
+// MARK: - Data Models
+// ──────────────────────────────────────────────
 
-enum TimerMode: String, CaseIterable, Codable {
+/// Timer mode: Work (やるべきこと) or Free (好きなこと)
+enum TimerMode: String, Codable {
     case work = "Work"
     case free = "Free"
 
@@ -13,290 +16,318 @@ enum TimerMode: String, CaseIterable, Codable {
         case .free: return .green
         }
     }
+
+    var opposite: TimerMode {
+        self == .work ? .free : .work
+    }
 }
 
+/// A single recorded session
 struct SessionRecord: Identifiable, Codable {
     let id: UUID
     let date: Date
     let mode: TimerMode
-    let duration: Int // in seconds
-    
-    init(mode: TimerMode, duration: Int) {
+    let durationSeconds: Int
+
+    init(mode: TimerMode, durationSeconds: Int) {
         self.id = UUID()
         self.date = Date()
         self.mode = mode
-        self.duration = duration
+        self.durationSeconds = durationSeconds
+    }
+
+    var formattedDuration: String {
+        let m = durationSeconds / 60
+        let s = durationSeconds % 60
+        return String(format: "%dm %02ds", m, s)
     }
 }
 
-// MARK: - AppStorage Helpers
+// ──────────────────────────────────────────────
+// MARK: - AppStorage helper for [SessionRecord]
+// ──────────────────────────────────────────────
 
 extension Array: @retroactive RawRepresentable where Element: Codable {
     public init?(rawValue: String) {
         guard let data = rawValue.data(using: .utf8),
-              let result = try? JSONDecoder().decode([Element].self, from: data)
+              let decoded = try? JSONDecoder().decode([Element].self, from: data)
         else { return nil }
-        self = result
+        self = decoded
     }
-
     public var rawValue: String {
         guard let data = try? JSONEncoder().encode(self),
-              let result = String(data: data, encoding: .utf8)
+              let str = String(data: data, encoding: .utf8)
         else { return "[]" }
-        return result
+        return str
     }
 }
 
-// MARK: - Views
+// ──────────────────────────────────────────────
+// MARK: - ContentView (Main Screen)
+// ──────────────────────────────────────────────
 
 struct ContentView: View {
-    // Persistent Settings
-    @AppStorage("workMinutes") private var workMinutes = 15
-    @AppStorage("workSeconds") private var workSeconds = 0
-    @AppStorage("freeMinutes") private var freeMinutes = 15
-    @AppStorage("freeSeconds") private var freeSeconds = 0
-    @AppStorage("alertInWork") private var alertInWork = false
-    @AppStorage("sessionHistory") private var history: [SessionRecord] = []
-    
-    // Timer State
-    @State private var mode: TimerMode = .work
-    @State private var secondsElapsed: Int = 0
-    @State private var isActive = false
-    @State private var isAlerting = false
-    
-    @State private var showingSettings = false
-    @State private var showingHistory = false
 
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    private let appVersion = "v1.2.0"
+    // ── Persistent settings ──
+    @AppStorage("workMinutes")  private var workMinutes  = 15
+    @AppStorage("workSeconds")  private var workSeconds  = 0
+    @AppStorage("freeMinutes")  private var freeMinutes  = 15
+    @AppStorage("freeSeconds")  private var freeSeconds  = 0
+    @AppStorage("alertInWork")  private var alertInWork  = false
+    @AppStorage("history")      private var history: [SessionRecord] = []
 
+    // ── Runtime state ──
+    @State private var mode: TimerMode     = .work
+    @State private var elapsed: Int        = 0
+    @State private var isRunning           = false
+    @State private var isAlerting          = false
+    @State private var workAlertFired      = false   // single-shot guard
+
+    // ── Sheet toggles ──
+    @State private var showSettings = false
+    @State private var showHistory  = false
+
+    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    // ── Computed ──
+    private var target: Int {
+        mode == .work
+            ? workMinutes * 60 + workSeconds
+            : freeMinutes * 60 + freeSeconds
+    }
+
+    private var isOvertime: Bool {
+        mode == .work && elapsed >= target
+    }
+
+    // ── Body ──
     var body: some View {
         ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
+            Color.black.ignoresSafeArea()
 
-            VStack(spacing: 40) {
-                // Header
-                HStack {
-                    Button(action: { showingHistory = true }) {
-                        Image(systemName: "list.bullet.rectangle.portrait")
-                            .font(.system(size: 24))
-                            .foregroundColor(.gray)
-                    }
-                    Spacer()
-                    Button(action: { showingSettings = true }) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.gray)
-                    }
-                }
-                .padding()
+            VStack(spacing: 0) {
+
+                // ─── Top bar ───
+                topBar
 
                 Spacer()
 
-                // Mode Display
+                // ─── Mode label ───
                 Text(mode.rawValue)
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                    .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundColor(mode.color)
-                    .padding(.bottom, 10)
 
-                // Main Time Display
-                Text(formatTime(secondsElapsed))
-                    .font(.system(size: 100, weight: .medium, design: .monospaced))
-                    .foregroundColor(timeColor)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(mode.color.opacity(0.3), lineWidth: 2)
-                            .padding(-20)
-                    )
+                // ─── Timer display ───
+                Text(formatTime(elapsed))
+                    .font(.system(size: 90, weight: .thin, design: .monospaced))
+                    .foregroundColor(isOvertime ? .orange : .white)
+                    .padding(.vertical, 16)
 
                 Spacer()
 
-                // Unified Control Section
-                VStack(spacing: 30) {
-                    HStack(spacing: 40) {
-                        // Play / Pause / Stop Alert
-                        Button(action: mainButtonAction) {
-                            ZStack {
-                                Circle()
-                                    .fill(mainButtonColor)
-                                    .frame(width: 120, height: 120)
-                                    .shadow(color: mainButtonColor.opacity(0.5), radius: 10)
-                                
-                                Image(systemName: mainButtonIcon)
-                                    .font(.system(size: 50, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                        }
+                // ─── Controls ───
+                controlButtons
+                    .padding(.bottom, 24)
 
-                        // Reset / Manual Switch
-                        Button(action: resetOrSwitchAction) {
-                            ZStack {
-                                Circle()
-                                    .stroke(Color.gray, lineWidth: 3)
-                                    .frame(width: 80, height: 80)
-                                
-                                Image(systemName: resetOrSwitchIcon)
-                                    .font(.system(size: 30))
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                        .disabled(isAlerting)
-                    }
-                    
-                    // Switch Mode Toggle-like Button
-                    if !isAlerting {
-                        Button(action: manualSwitch) {
-                            Text("Switch to \(mode == .work ? "Free" : "Work")")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 24)
-                                .background(Capsule().fill(Color.gray.opacity(0.2)))
-                        }
-                    }
-                }
+                // ─── Switch mode ───
+                switchButton
+                    .padding(.bottom, 16)
 
-                Spacer()
-
-                Text(appVersion)
-                    .font(.caption)
-                    .foregroundColor(.gray.opacity(0.5))
-                    .padding(.bottom, 10)
+                // ─── Version ───
+                Text("v1.3.1")
+                    .font(.caption2)
+                    .foregroundColor(.gray.opacity(0.4))
+                    .padding(.bottom, 8)
             }
         }
-        .sheet(isPresented: $showingSettings) {
+        // ── Sheets ──
+        .sheet(isPresented: $showSettings) {
             SettingsView(
-                workMinutes: $workMinutes,
-                workSeconds: $workSeconds,
-                freeMinutes: $freeMinutes,
-                freeSeconds: $freeSeconds,
-                alertInWork: $alertInWork
+                workMin: $workMinutes, workSec: $workSeconds,
+                freeMin: $freeMinutes, freeSec: $freeSeconds,
+                alertInWork: $alertInWork,
+                onDone: { resetTimer() }
             )
         }
-        .sheet(isPresented: $showingHistory) {
-            HistoryView(history: $history)
+        .sheet(isPresented: $showHistory) {
+            HistoryView(records: $history)
         }
-        .onReceive(timer) { _ in
-            if isAlerting {
-                playSound()
-            }
-            
-            guard isActive else { return }
-
-            secondsElapsed += 1
-            let target = getTargetSeconds(for: mode)
-
-            if mode == .free {
-                if secondsElapsed >= target {
-                    secondsElapsed = target // Pin at target
-                    isActive = false
-                    isAlerting = true
-                    recordSession()
-                }
-            } else {
-                // Work mode
-                if alertInWork && secondsElapsed == target {
-                    // Play sound once for Work mode
-                    playSound()
-                }
-            }
+        // ── Timer tick ──
+        .onReceive(tick) { _ in
+            handleTick()
         }
     }
 
-    // MARK: - Logic Helpers
+    // ──────────────────────────────────────────
+    // MARK: - Sub-views
+    // ──────────────────────────────────────────
 
-    private var timeColor: Color {
-        let target = getTargetSeconds(for: mode)
-        if mode == .work && secondsElapsed >= target {
-            return .orange
+    private var topBar: some View {
+        HStack {
+            Button { showHistory = true } label: {
+                Image(systemName: "list.bullet.rectangle.portrait")
+                    .font(.title2)
+                    .foregroundColor(.gray)
+            }
+            Spacer()
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.title2)
+                    .foregroundColor(.gray)
+            }
         }
-        return .white
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
     }
+
+    private var controlButtons: some View {
+        HStack(spacing: 32) {
+            // Main action: Play / Pause / Stop-Alert
+            Button(action: mainAction) {
+                Circle()
+                    .fill(mainButtonColor)
+                    .frame(width: 100, height: 100)
+                    .overlay(
+                        Image(systemName: mainButtonIcon)
+                            .font(.system(size: 40, weight: .semibold))
+                            .foregroundColor(.white)
+                    )
+            }
+
+            // Reset
+            Button(action: resetTimer) {
+                Circle()
+                    .strokeBorder(Color.gray.opacity(0.5), lineWidth: 2)
+                    .frame(width: 70, height: 70)
+                    .overlay(
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 26))
+                            .foregroundColor(.gray)
+                    )
+            }
+            .disabled(isAlerting)
+            .opacity(isAlerting ? 0.3 : 1)
+        }
+    }
+
+    private var switchButton: some View {
+        Button(action: manualSwitch) {
+            Text("Switch to \(mode.opposite.rawValue)")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white)
+                .padding(.vertical, 10)
+                .padding(.horizontal, 28)
+                .background(Capsule().fill(Color.gray.opacity(0.25)))
+        }
+        .disabled(isAlerting)
+        .opacity(isAlerting ? 0.3 : 1)
+    }
+
+    // ──────────────────────────────────────────
+    // MARK: - Button helpers
+    // ──────────────────────────────────────────
 
     private var mainButtonIcon: String {
         if isAlerting { return "stop.fill" }
-        return isActive ? "pause.fill" : "play.fill"
+        return isRunning ? "pause.fill" : "play.fill"
     }
 
     private var mainButtonColor: Color {
         if isAlerting { return .red }
-        return isActive ? .orange : .blue
+        return isRunning ? .orange : .blue
     }
 
-    private var resetOrSwitchIcon: String {
-        return "arrow.clockwise"
-    }
+    // ──────────────────────────────────────────
+    // MARK: - Actions
+    // ──────────────────────────────────────────
 
-    private func mainButtonAction() {
+    private func mainAction() {
         if isAlerting {
             stopAlert()
         } else {
-            toggleTimer()
+            isRunning.toggle()
         }
     }
 
-    private func resetOrSwitchAction() {
-        resetTimer()
-    }
-
-    private func toggleTimer() {
-        isActive.toggle()
-    }
-
+    /// Reset timer to 0, keep current mode
     private func resetTimer() {
-        isActive = false
+        isRunning = false
         isAlerting = false
-        secondsElapsed = 0
+        workAlertFired = false
+        elapsed = 0
     }
 
+    /// Manual mode switch — records session, switches, resets
     private func manualSwitch() {
         recordSession()
-        isActive = false
+        isRunning = false
         isAlerting = false
-        mode = (mode == .work ? .free : .work)
-        secondsElapsed = 0
+        workAlertFired = false
+        mode = mode.opposite
+        elapsed = 0
     }
 
+    /// Called when user taps STOP during alert
     private func stopAlert() {
         isAlerting = false
-        if mode == .free {
-            // Requirements: Stop alert -> Switch to Work -> Auto start
-            mode = .work
-            secondsElapsed = 0
-            isActive = true
-        } else {
-            // Work mode alert stop: just keep counting
-            isActive = true
-        }
+        recordSession()
+        // Req 2.2: switch to opposite mode and auto-start
+        mode = mode.opposite
+        elapsed = 0
+        workAlertFired = false
+        isRunning = true
     }
 
-    private func recordSession() {
-        if secondsElapsed > 0 {
-            let record = SessionRecord(mode: mode, duration: secondsElapsed)
-            history.insert(record, at: 0)
-            // Limit to last 50 records
-            if history.count > 50 {
-                history.removeLast()
+    // ──────────────────────────────────────────
+    // MARK: - Timer logic
+    // ──────────────────────────────────────────
+
+    private func handleTick() {
+        // Play persistent alert sound every second while alerting
+        if isAlerting {
+            playSound()
+            return
+        }
+
+        guard isRunning else { return }
+
+        elapsed += 1
+
+        switch mode {
+        case .free:
+            // Req 2.1 Free: stop at target, start persistent alert
+            if elapsed >= target {
+                elapsed = target
+                isRunning = false
+                isAlerting = true
+            }
+
+        case .work:
+            // Req 2.1 Work: single-shot alert at target (if enabled), keep counting
+            if alertInWork && elapsed == target && !workAlertFired {
+                workAlertFired = true
+                playSound()
             }
         }
     }
 
-    private func getTargetSeconds(for mode: TimerMode) -> Int {
-        switch mode {
-        case .work: return (workMinutes * 60) + workSeconds
-        case .free: return (freeMinutes * 60) + freeSeconds
-        }
+    // ──────────────────────────────────────────
+    // MARK: - Helpers
+    // ──────────────────────────────────────────
+
+    private func recordSession() {
+        guard elapsed > 0 else { return }
+        let record = SessionRecord(mode: mode, durationSeconds: elapsed)
+        history.insert(record, at: 0)
+        if history.count > 50 { history.removeLast() }
     }
 
-    private func formatTime(_ totalSeconds: Int) -> String {
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-        } else {
-            return String(format: "%02d:%02d", minutes, seconds)
-        }
+    private func formatTime(_ total: Int) -> String {
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        let s = total % 60
+        if h > 0 { return String(format: "%d:%02d:%02d", h, m, s) }
+        return String(format: "%02d:%02d", m, s)
     }
 
     private func playSound() {
@@ -304,96 +335,90 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Subviews
+// ──────────────────────────────────────────────
+// MARK: - SettingsView
+// ──────────────────────────────────────────────
 
 struct SettingsView: View {
-    @Environment(\.dismiss) var dismiss
-    @Binding var workMinutes: Int
-    @Binding var workSeconds: Int
-    @Binding var freeMinutes: Int
-    @Binding var freeSeconds: Int
+    @Environment(\.dismiss) private var dismiss
+    @Binding var workMin: Int
+    @Binding var workSec: Int
+    @Binding var freeMin: Int
+    @Binding var freeSec: Int
     @Binding var alertInWork: Bool
+    var onDone: () -> Void
 
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Work Duration")) {
-                    Stepper("Minutes: \(workMinutes)", value: $workMinutes, in: 0...120)
-                    Stepper("Seconds: \(workSeconds)", value: $workSeconds, in: 0...59)
+                Section("Work Duration") {
+                    Stepper("Minutes: \(workMin)", value: $workMin, in: 0...120)
+                    Stepper("Seconds: \(workSec)", value: $workSec, in: 0...59)
                 }
-                
-                Section(header: Text("Free Duration")) {
-                    Stepper("Minutes: \(freeMinutes)", value: $freeMinutes, in: 0...120)
-                    Stepper("Seconds: \(freeSeconds)", value: $freeSeconds, in: 0...59)
+                Section("Free Duration") {
+                    Stepper("Minutes: \(freeMin)", value: $freeMin, in: 0...120)
+                    Stepper("Seconds: \(freeSec)", value: $freeSec, in: 0...59)
                 }
-
-                Section(header: Text("Notifications")) {
-                    Toggle("Alarm in Work Mode", isOn: $alertInWork)
+                Section("Notifications") {
+                    Toggle("Alert at Work target", isOn: $alertInWork)
                 }
             }
             .navigationTitle("Settings")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { onDone(); dismiss() }
                 }
             }
         }
     }
 }
 
+// ──────────────────────────────────────────────
+// MARK: - HistoryView
+// ──────────────────────────────────────────────
+
 struct HistoryView: View {
-    @Environment(\.dismiss) var dismiss
-    @Binding var history: [SessionRecord]
+    @Environment(\.dismiss) private var dismiss
+    @Binding var records: [SessionRecord]
 
     var body: some View {
         NavigationView {
             List {
-                if history.isEmpty {
-                    Text("No records found").foregroundColor(.secondary)
+                if records.isEmpty {
+                    Text("No sessions recorded yet.")
+                        .foregroundColor(.secondary)
                 } else {
-                    ForEach(history) { record in
+                    ForEach(records) { r in
                         HStack {
-                            VStack(alignment: .leading) {
-                                Text(record.mode.rawValue)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(r.mode.rawValue)
                                     .fontWeight(.bold)
-                                    .foregroundColor(record.mode.color)
-                                Text(record.date, style: .date)
+                                    .foregroundColor(r.mode.color)
+                                Text(r.date, style: .date)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                             Spacer()
-                            Text(formatDuration(record.duration))
+                            Text(r.formattedDuration)
                                 .font(.system(.body, design: .monospaced))
                         }
                     }
-                    .onDelete(perform: deleteRecords)
+                    .onDelete { records.remove(atOffsets: $0) }
                 }
             }
             .navigationTitle("History")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .cancellationAction) { EditButton() }
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Close") { dismiss() }
-                }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    EditButton()
                 }
             }
         }
     }
-
-    private func deleteRecords(at offsets: IndexSet) {
-        history.remove(atOffsets: offsets)
-    }
-
-    private func formatDuration(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%dm %ds", m, s)
-    }
 }
 
+// ──────────────────────────────────────────────
 // MARK: - Preview
+// ──────────────────────────────────────────────
 
-#Preview {
-    ContentView()
-}
+#Preview { ContentView() }
