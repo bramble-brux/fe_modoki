@@ -177,20 +177,16 @@ struct ContentView: View {
         .padding(.top, 12)
     }
 
-    /// Single button — always in the same position
+    /// Single button — always in the same position, icon only
     private var controlArea: some View {
         Button(action: buttonTapped) {
-            VStack(spacing: 6) {
-                Image(systemName: phase == .alerting ? "stop.fill" : "arrow.left.arrow.right")
-                    .font(.system(size: 36, weight: .bold))
-                Text(phase == .alerting ? "STOP" : "\(mode.opposite.rawValue) に切替")
-                    .font(.system(size: 14, weight: .semibold))
-            }
-            .foregroundColor(.white)
-            .frame(width: 130, height: 130)
-            .background(
-                Circle().fill(phase == .alerting ? Color.red : mode.opposite.color.opacity(0.8))
-            )
+            Image(systemName: "stop.fill")
+                .font(.system(size: 44, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 120, height: 120)
+                .background(
+                    Circle().fill(phase == .alerting ? Color.red : mode.opposite.color.opacity(0.8))
+                )
         }
     }
 
