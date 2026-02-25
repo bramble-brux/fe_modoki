@@ -64,9 +64,8 @@ extension Array: @retroactive RawRepresentable where Element: Codable {
 // MARK: - App State
 // ──────────────────────────────────────────────
 
-/// Three possible phases of the timer
+/// Two possible phases of the timer
 enum TimerPhase {
-    case idle       // Not started — user picks a mode
     case running    // Counting up
     case alerting   // Free target reached, alarm ringing
 }
@@ -88,7 +87,7 @@ struct ContentView: View {
     // ── Runtime state ──
     @State private var mode: TimerMode     = .work
     @State private var elapsed: Int        = 0
-    @State private var phase: TimerPhase   = .idle
+    @State private var phase: TimerPhase   = .running
     @State private var workAlertFired      = false
 
     // ── Sheet toggles ──
@@ -138,7 +137,7 @@ struct ContentView: View {
                     .padding(.bottom, 32)
 
                 // ─── Version ───
-                Text("v1.4.0")
+                Text("v1.5.0")
                     .font(.caption2)
                     .foregroundColor(.gray.opacity(0.4))
                     .padding(.bottom, 8)
@@ -149,7 +148,7 @@ struct ContentView: View {
                 workMin: $workMinutes, workSec: $workSeconds,
                 freeMin: $freeMinutes, freeSec: $freeSeconds,
                 alertInWork: $alertInWork,
-                onDone: { phase = .idle; elapsed = 0 }
+                onDone: { elapsed = 0; phase = .running }
             )
         }
         .sheet(isPresented: $showHistory) {
@@ -178,76 +177,19 @@ struct ContentView: View {
         .padding(.top, 12)
     }
 
-    /// The single control area that changes based on phase
-    @ViewBuilder
+    /// Single button — always in the same position
     private var controlArea: some View {
-        switch phase {
-
-        // ─── IDLE: pick which mode to start ───
-        case .idle:
-            VStack(spacing: 16) {
-                Text("モードを選んで開始")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-
-                HStack(spacing: 24) {
-                    startButton(for: .work)
-                    startButton(for: .free)
-                }
-            }
-
-        // ─── RUNNING: one button to switch ───
-        case .running:
-            Button(action: switchToNext) {
-                VStack(spacing: 6) {
-                    Image(systemName: "arrow.left.arrow.right")
-                        .font(.system(size: 36, weight: .bold))
-                    Text("\(mode.opposite.rawValue) に切替")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundColor(.white)
-                .frame(width: 130, height: 130)
-                .background(
-                    Circle().fill(mode.opposite.color.opacity(0.8))
-                )
-            }
-
-        // ─── ALERTING: same position, but STOP ───
-        case .alerting:
-            Button(action: stopAlertAndSwitch) {
-                VStack(spacing: 6) {
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 36, weight: .bold))
-                    Text("STOP")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundColor(.white)
-                .frame(width: 130, height: 130)
-                .background(
-                    Circle().fill(Color.red)
-                )
-            }
-        }
-    }
-
-    /// A start button for idle state
-    private func startButton(for m: TimerMode) -> some View {
-        Button {
-            mode = m
-            elapsed = 0
-            workAlertFired = false
-            phase = .running
-        } label: {
+        Button(action: buttonTapped) {
             VStack(spacing: 6) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 28))
-                Text(m.rawValue)
+                Image(systemName: phase == .alerting ? "stop.fill" : "arrow.left.arrow.right")
+                    .font(.system(size: 36, weight: .bold))
+                Text(phase == .alerting ? "STOP" : "\(mode.opposite.rawValue) に切替")
                     .font(.system(size: 14, weight: .semibold))
             }
             .foregroundColor(.white)
-            .frame(width: 100, height: 100)
+            .frame(width: 130, height: 130)
             .background(
-                Circle().fill(m.color.opacity(0.8))
+                Circle().fill(phase == .alerting ? Color.red : mode.opposite.color.opacity(0.8))
             )
         }
     }
@@ -256,17 +198,8 @@ struct ContentView: View {
     // MARK: - Actions
     // ──────────────────────────────────────────
 
-    /// Running → record, switch mode, auto-start
-    private func switchToNext() {
-        recordSession()
-        mode = mode.opposite
-        elapsed = 0
-        workAlertFired = false
-        // stays in .running — auto-continues
-    }
-
-    /// Alerting → stop alarm, switch mode, auto-start
-    private func stopAlertAndSwitch() {
+    /// Single handler for the one button
+    private func buttonTapped() {
         recordSession()
         mode = mode.opposite
         elapsed = 0
