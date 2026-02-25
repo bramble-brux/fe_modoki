@@ -196,10 +196,13 @@ struct ContentView: View {
     /// Active: mode label, timer, STOP button, tiny finish link
     private var activeView: some View {
         VStack(spacing: 0) {
-            // Mode label
+            // Mode icon + label
+            Image(systemName: mode.icon)
+                .font(.system(size: 30))
+                .foregroundColor(.white)
             Text(mode.rawValue)
                 .font(.system(size: 42, weight: .bold, design: .rounded))
-                .foregroundColor(mode.color)
+                .foregroundColor(.white)
 
             // Timer
             Text(formatTime(elapsed))
