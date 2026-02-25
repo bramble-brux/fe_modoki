@@ -5,7 +5,6 @@ import AudioToolbox
 // MARK: - Data Models
 // ──────────────────────────────────────────────
 
-/// Timer mode: Work (やるべきこと) or Free (好きなこと)
 enum TimerMode: String, Codable {
     case work = "Work"
     case free = "Free"
@@ -22,7 +21,6 @@ enum TimerMode: String, Codable {
     }
 }
 
-/// A single recorded session
 struct SessionRecord: Identifiable, Codable {
     let id: UUID
     let date: Date
@@ -44,7 +42,7 @@ struct SessionRecord: Identifiable, Codable {
 }
 
 // ──────────────────────────────────────────────
-// MARK: - AppStorage helper for [SessionRecord]
+// MARK: - AppStorage helper
 // ──────────────────────────────────────────────
 
 extension Array: @retroactive RawRepresentable where Element: Codable {
@@ -63,7 +61,18 @@ extension Array: @retroactive RawRepresentable where Element: Codable {
 }
 
 // ──────────────────────────────────────────────
-// MARK: - ContentView (Main Screen)
+// MARK: - App State
+// ──────────────────────────────────────────────
+
+/// Three possible phases of the timer
+enum TimerPhase {
+    case idle       // Not started — user picks a mode
+    case running    // Counting up
+    case alerting   // Free target reached, alarm ringing
+}
+
+// ──────────────────────────────────────────────
+// MARK: - ContentView
 // ──────────────────────────────────────────────
 
 struct ContentView: View {
@@ -79,9 +88,8 @@ struct ContentView: View {
     // ── Runtime state ──
     @State private var mode: TimerMode     = .work
     @State private var elapsed: Int        = 0
-    @State private var isRunning           = false
-    @State private var isAlerting          = false
-    @State private var workAlertFired      = false   // single-shot guard
+    @State private var phase: TimerPhase   = .idle
+    @State private var workAlertFired      = false
 
     // ── Sheet toggles ──
     @State private var showSettings = false
@@ -125,37 +133,29 @@ struct ContentView: View {
 
                 Spacer()
 
-                // ─── Controls ───
-                controlButtons
-                    .padding(.bottom, 20)
-
-                // ─── Switch mode ───
-                switchButton
-                    .padding(.bottom, 12)
+                // ─── The ONE control area ───
+                controlArea
+                    .padding(.bottom, 32)
 
                 // ─── Version ───
-                Text("v1.3.1")
+                Text("v1.4.0")
                     .font(.caption2)
                     .foregroundColor(.gray.opacity(0.4))
                     .padding(.bottom, 8)
             }
         }
-        // ── Sheets ──
         .sheet(isPresented: $showSettings) {
             SettingsView(
                 workMin: $workMinutes, workSec: $workSeconds,
                 freeMin: $freeMinutes, freeSec: $freeSeconds,
                 alertInWork: $alertInWork,
-                onDone: { resetTimer() }
+                onDone: { phase = .idle; elapsed = 0 }
             )
         }
         .sheet(isPresented: $showHistory) {
             HistoryView(records: $history)
         }
-        // ── Timer tick ──
-        .onReceive(tick) { _ in
-            handleTick()
-        }
+        .onReceive(tick) { _ in handleTick() }
     }
 
     // ──────────────────────────────────────────
@@ -166,107 +166,112 @@ struct ContentView: View {
         HStack {
             Button { showHistory = true } label: {
                 Image(systemName: "list.bullet.rectangle.portrait")
-                    .font(.title2)
-                    .foregroundColor(.gray)
+                    .font(.title2).foregroundColor(.gray)
             }
             Spacer()
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape.fill")
-                    .font(.title2)
-                    .foregroundColor(.gray)
+                    .font(.title2).foregroundColor(.gray)
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
     }
 
-    private var controlButtons: some View {
-        // Single main button: Play / Pause / Stop-Alert
-        Button(action: mainAction) {
-            Circle()
-                .fill(mainButtonColor)
-                .frame(width: 100, height: 100)
-                .overlay(
-                    Image(systemName: mainButtonIcon)
-                        .font(.system(size: 40, weight: .semibold))
-                        .foregroundColor(.white)
+    /// The single control area that changes based on phase
+    @ViewBuilder
+    private var controlArea: some View {
+        switch phase {
+
+        // ─── IDLE: pick which mode to start ───
+        case .idle:
+            VStack(spacing: 16) {
+                Text("モードを選んで開始")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+
+                HStack(spacing: 24) {
+                    startButton(for: .work)
+                    startButton(for: .free)
+                }
+            }
+
+        // ─── RUNNING: one button to switch ───
+        case .running:
+            Button(action: switchToNext) {
+                VStack(spacing: 6) {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .font(.system(size: 36, weight: .bold))
+                    Text("\(mode.opposite.rawValue) に切替")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(width: 130, height: 130)
+                .background(
+                    Circle().fill(mode.opposite.color.opacity(0.8))
                 )
+            }
+
+        // ─── ALERTING: same position, but STOP ───
+        case .alerting:
+            Button(action: stopAlertAndSwitch) {
+                VStack(spacing: 6) {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 36, weight: .bold))
+                    Text("STOP")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(width: 130, height: 130)
+                .background(
+                    Circle().fill(Color.red)
+                )
+            }
         }
     }
 
-    private var switchButton: some View {
-        Button(action: manualSwitch) {
-            HStack(spacing: 12) {
-                Image(systemName: "arrow.left.arrow.right")
-                    .font(.system(size: 22, weight: .bold))
-                Text("\(mode.opposite.rawValue) に切替")
-                    .font(.system(size: 18, weight: .bold))
+    /// A start button for idle state
+    private func startButton(for m: TimerMode) -> some View {
+        Button {
+            mode = m
+            elapsed = 0
+            workAlertFired = false
+            phase = .running
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 28))
+                Text(m.rawValue)
+                    .font(.system(size: 14, weight: .semibold))
             }
             .foregroundColor(.white)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 36)
+            .frame(width: 100, height: 100)
             .background(
-                Capsule()
-                    .fill(mode.opposite.color.opacity(0.7))
+                Circle().fill(m.color.opacity(0.8))
             )
         }
-        .disabled(isAlerting)
-        .opacity(isAlerting ? 0.3 : 1)
-    }
-
-    // ──────────────────────────────────────────
-    // MARK: - Button helpers
-    // ──────────────────────────────────────────
-
-    private var mainButtonIcon: String {
-        if isAlerting { return "stop.fill" }
-        return isRunning ? "pause.fill" : "play.fill"
-    }
-
-    private var mainButtonColor: Color {
-        if isAlerting { return .red }
-        return isRunning ? .orange : .blue
     }
 
     // ──────────────────────────────────────────
     // MARK: - Actions
     // ──────────────────────────────────────────
 
-    private func mainAction() {
-        if isAlerting {
-            stopAlert()
-        } else {
-            isRunning.toggle()
-        }
-    }
-
-    /// Reset timer to 0, keep current mode
-    private func resetTimer() {
-        isRunning = false
-        isAlerting = false
-        workAlertFired = false
-        elapsed = 0
-    }
-
-    /// Manual mode switch — records session, switches, auto-starts
-    private func manualSwitch() {
+    /// Running → record, switch mode, auto-start
+    private func switchToNext() {
         recordSession()
-        isAlerting = false
-        workAlertFired = false
-        mode = mode.opposite
-        elapsed = 0
-        isRunning = true  // Auto-start after switching
-    }
-
-    /// Called when user taps STOP during alert
-    private func stopAlert() {
-        isAlerting = false
-        recordSession()
-        // Req 2.2: switch to opposite mode and auto-start
         mode = mode.opposite
         elapsed = 0
         workAlertFired = false
-        isRunning = true
+        // stays in .running — auto-continues
+    }
+
+    /// Alerting → stop alarm, switch mode, auto-start
+    private func stopAlertAndSwitch() {
+        recordSession()
+        mode = mode.opposite
+        elapsed = 0
+        workAlertFired = false
+        phase = .running
     }
 
     // ──────────────────────────────────────────
@@ -274,27 +279,22 @@ struct ContentView: View {
     // ──────────────────────────────────────────
 
     private func handleTick() {
-        // Play persistent alert sound every second while alerting
-        if isAlerting {
+        if phase == .alerting {
             playSound()
             return
         }
 
-        guard isRunning else { return }
+        guard phase == .running else { return }
 
         elapsed += 1
 
         switch mode {
         case .free:
-            // Req 2.1 Free: stop at target, start persistent alert
             if elapsed >= target {
                 elapsed = target
-                isRunning = false
-                isAlerting = true
+                phase = .alerting
             }
-
         case .work:
-            // Req 2.1 Work: single-shot alert at target (if enabled), keep counting
             if alertInWork && elapsed == target && !workAlertFired {
                 workAlertFired = true
                 playSound()
@@ -407,9 +407,5 @@ struct HistoryView: View {
         }
     }
 }
-
-// ──────────────────────────────────────────────
-// MARK: - Preview
-// ──────────────────────────────────────────────
 
 #Preview { ContentView() }
