@@ -21,8 +21,13 @@ enum TimerMode {
 
 struct ContentView: View {
     @State private var mode: TimerMode = .work
-    @State private var secondsRemaining: Int = 10
+    @State private var workMinutes: Int = 15
+    @State private var freeMinutes: Int = 15
+    @State private var secondsRemaining: Int = 15 * 60
     @State private var isActive = false
+    @State private var showingAlert = false
+    @State private var showingSettings = false
+
     @State private var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -30,6 +35,18 @@ struct ContentView: View {
             Color.black.edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 40) {
+                HStack {
+                    Spacer()
+                    Button(action: { showingSettings = true }) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.gray)
+                    }
+                    .padding()
+                }
+
+                Spacer()
+
                 Text(mode.label)
                     .font(.system(size: 40, weight: .bold, design: .rounded))
                     .foregroundColor(mode.color)
@@ -58,7 +75,7 @@ struct ContentView: View {
                     }
                 }
 
-                Button(action: switchMode) {
+                Button(action: { switchMode(to: mode == .work ? .free : .work) }) {
                     Text("Switch to \(mode == .work ? "Free" : "Work")")
                         .font(.headline)
                         .foregroundColor(.white)
@@ -68,7 +85,22 @@ struct ContentView: View {
                         .cornerRadius(15)
                 }
                 .padding(.horizontal, 40)
+                
+                Spacer()
             }
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView(workMinutes: $workMinutes, freeMinutes: $freeMinutes, onSave: {
+                resetTimer()
+            })
+        }
+        .alert("Free Time Ended", isPresented: $showingAlert) {
+            Button("Start Working", role: .cancel) {
+                switchMode(to: .work)
+                isActive = true
+            }
+        } message: {
+            Text("Switching to Work mode automatically.")
         }
         .onReceive(timer) { _ in
             guard isActive else { return }
@@ -78,9 +110,9 @@ struct ContentView: View {
                     secondsRemaining -= 1
                 } else {
                     isActive = false
+                    showingAlert = true
                 }
             } else {
-                // Work mode: continues indefinitely
                 secondsRemaining -= 1
             }
         }
@@ -88,7 +120,7 @@ struct ContentView: View {
 
     private var timeColor: Color {
         if secondsRemaining < 0 {
-            return .orange // Overtime
+            return .orange
         }
         return .white
     }
@@ -114,13 +146,38 @@ struct ContentView: View {
 
     private func resetTimer() {
         isActive = false
-        secondsRemaining = 10
+        secondsRemaining = (mode == .work ? workMinutes : freeMinutes) * 60
     }
 
-    private func switchMode() {
+    private func switchMode(to newMode: TimerMode) {
         isActive = false
-        mode = (mode == .work ? .free : .work)
-        secondsRemaining = 10
+        mode = newMode
+        secondsRemaining = (mode == .work ? workMinutes : freeMinutes) * 60
+    }
+}
+
+struct SettingsView: View {
+    @Environment(\.dismiss) var dismiss
+    @Binding var workMinutes: Int
+    @Binding var freeMinutes: Int
+    var onSave: () -> Void
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Durations (Minutes)")) {
+                    Stepper("Work: \(workMinutes) min", value: $workMinutes, in: 1...120)
+                    Stepper("Free: \(freeMinutes) min", value: $freeMinutes, in: 1...120)
+                }
+            }
+            .navigationTitle("Settings")
+            .toolbar {
+                Button("Done") {
+                    onSave()
+                    dismiss()
+                }
+            }
+        }
     }
 }
 
