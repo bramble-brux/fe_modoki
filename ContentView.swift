@@ -108,6 +108,8 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate, Observabl
 // ──────────────────────────────────────────────
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var backgroundDate: Date? = nil
 
     // ── Persistent settings ──
     @AppStorage("workMinutes")  private var workMinutes  = 15
@@ -192,7 +194,7 @@ struct ContentView: View {
                 Spacer()
 
                 // ─── Version ───
-                Text("v1.7.1")
+                Text("v1.8.0")
                     .font(.caption2)
                     .foregroundColor(.gray.opacity(0.4))
                     .padding(.bottom, 8)
@@ -215,6 +217,9 @@ struct ContentView: View {
                 stopAndSwitch()
                 notificationManager.actionReceived = false
             }
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            handleScenePhaseChange(newPhase)
         }
     }
 
@@ -464,15 +469,57 @@ struct ContentView: View {
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
-    private func scheduleNotification(title: String, body: String) {
+    private func scheduleNotification(title: String, body: String, delay: TimeInterval? = nil) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
         content.categoryIdentifier = "TIMER_CATEGORY"
 
-        let request = UNNotificationRequest(identifier: "TIMER_ALERT", content: content, trigger: nil)
+        var trigger: UNNotificationTrigger? = nil
+        if let d = delay, d > 0 {
+            trigger = UNTimeIntervalNotificationTrigger(timeInterval: d, repeats: false)
+        }
+
+        let request = UNNotificationRequest(identifier: "TIMER_ALERT", content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request)
+    }
+
+    // ──────────────────────────────────────────
+    // MARK: - Scene Phase Handling
+    // ──────────────────────────────────────────
+
+    private func handleScenePhaseChange(_ newScenePhase: ScenePhase) {
+        switch newScenePhase {
+        case .background:
+            backgroundDate = Date()
+            // Schedule future notification if timer is running
+            if self.phase == .running && !isOvertime {
+                let remaining = TimeInterval(target - elapsed)
+                if remaining > 0 {
+                    let title = mode == .work ? "Work 目標達成" : "Free 終了"
+                    let body = mode == .work ? "お疲れ様です！延長も可能です。" : "Work に切り替えてください"
+                    scheduleNotification(title: title, body: body, delay: remaining)
+                }
+            }
+        case .active:
+            if let start = backgroundDate {
+                let diff = Int(Date().timeIntervalSince(start))
+                if self.phase == .running {
+                    elapsed += diff
+                    // Catch up logic: check if we should be alerting now
+                    if mode == .free && elapsed >= target {
+                        elapsed = target
+                        self.phase = .alerting
+                    }
+                    // For Work mode, it just continues as overtime, color changes automatically
+                }
+                backgroundDate = nil
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["TIMER_ALERT"])
+            }
+        default:
+            break
+        }
     }
 }
 
