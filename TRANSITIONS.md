@@ -15,6 +15,9 @@ graph TD
     
     WorkAuto --> Work
     
+    Work -->|セッション終了| Record[記録・振り返り]
+    Free -->|セッション終了| Record
+    
     subgraph 設定変更
         Gear((ギアアイコン)) --> Settings[設定画面]
         Settings -->|保存| Start
