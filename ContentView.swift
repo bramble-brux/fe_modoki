@@ -123,6 +123,12 @@ struct ContentView: View {
         phase == .running || phase == .alerting
     }
 
+    private var activeDisplayColor: Color {
+        if mode == .free && phase == .alerting { return .red }
+        if isOvertime { return Color(red: 0.3, green: 1.0, blue: 0.5) }
+        return .white
+    }
+
     // ── Body ──
     var body: some View {
         ZStack {
@@ -199,15 +205,15 @@ struct ContentView: View {
             // Mode icon + label
             Image(systemName: mode.icon)
                 .font(.system(size: 30))
-                .foregroundColor(.white)
+                .foregroundColor(activeDisplayColor)
             Text(mode.rawValue)
                 .font(.system(size: 42, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundColor(activeDisplayColor)
 
             // Timer
             Text(formatTime(elapsed))
                 .font(.system(size: 90, weight: .thin, design: .monospaced))
-                .foregroundColor(isOvertime ? Color(red: 0.3, green: 1.0, blue: 0.5) : .white)
+                .foregroundColor(activeDisplayColor)
                 .padding(.vertical, 16)
 
             Spacer().frame(height: 40)
