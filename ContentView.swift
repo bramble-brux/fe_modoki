@@ -160,14 +160,31 @@ struct ContentView: View {
     // MARK: - Phase Views
     // ──────────────────────────────────────────
 
-    /// Idle: just a START button
+    /// Idle: choose which mode to start
     private var idleView: some View {
-        Button(action: startSession) {
-            Image(systemName: "play.fill")
-                .font(.system(size: 50, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 140, height: 140)
-                .background(Circle().fill(Color.blue))
+        HStack(spacing: 32) {
+            Button { beginWith(.work) } label: {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 110, height: 110)
+                    .background(Circle().fill(TimerMode.work.color.opacity(0.8)))
+                    .overlay(
+                        Text("Work").font(.caption2.bold()).foregroundColor(.white)
+                            .offset(y: 38)
+                    )
+            }
+            Button { beginWith(.free) } label: {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 110, height: 110)
+                    .background(Circle().fill(TimerMode.free.color.opacity(0.8)))
+                    .overlay(
+                        Text("Free").font(.caption2.bold()).foregroundColor(.white)
+                            .offset(y: 38)
+                    )
+            }
         }
     }
 
@@ -279,8 +296,8 @@ struct ContentView: View {
     // MARK: - Actions
     // ──────────────────────────────────────────
 
-    private func startSession() {
-        mode = .work
+    private func beginWith(_ startMode: TimerMode) {
+        mode = startMode
         elapsed = 0
         workAlertFired = false
         totalWorkSeconds = 0
