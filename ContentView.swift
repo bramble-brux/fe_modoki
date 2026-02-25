@@ -119,6 +119,10 @@ struct ContentView: View {
         mode == .work && elapsed >= target
     }
 
+    private var isActive: Bool {
+        phase == .running || phase == .alerting
+    }
+
     // ── Body ──
     var body: some View {
         ZStack {
@@ -200,7 +204,7 @@ struct ContentView: View {
             // Timer
             Text(formatTime(elapsed))
                 .font(.system(size: 90, weight: .thin, design: .monospaced))
-                .foregroundColor(isOvertime ? .orange : .white)
+                .foregroundColor(isOvertime ? .cyan : .white)
                 .padding(.vertical, 16)
 
             Spacer().frame(height: 40)
@@ -212,21 +216,11 @@ struct ContentView: View {
                     .foregroundColor(.white)
                     .frame(width: 120, height: 120)
                     .background(
-                        Circle().fill(phase == .alerting ? Color.red : mode.opposite.color.opacity(0.8))
-                    )
+                        Circle().fill(Color.red)
+                )
             }
 
-            Spacer().frame(height: 60)
-
-            // Finish button — small but readable
-            Button(action: finishSession) {
-                Text("終了")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.gray.opacity(0.6))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
-                    .background(Capsule().stroke(Color.gray.opacity(0.3), lineWidth: 1))
-            }
+            Spacer().frame(height: 40)
         }
     }
 
@@ -285,6 +279,14 @@ struct ContentView: View {
             Button { showHistory = true } label: {
                 Image(systemName: "list.bullet.rectangle.portrait")
                     .font(.title2).foregroundColor(.gray)
+            }
+            Spacer()
+            if isActive {
+                Button(action: finishSession) {
+                    Text("終了")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.gray.opacity(0.5))
+                }
             }
             Spacer()
             Button { showSettings = true } label: {
