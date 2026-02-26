@@ -139,6 +139,7 @@ class TimerManager {
                 if !workNotificationSent {
                     workNotificationSent = true
                     if settings?.alertInWork == true {
+                        NotificationManager.shared.playAlert()
                         NotificationManager.shared.notifyWorkComplete()
                     }
                 }
