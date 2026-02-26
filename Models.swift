@@ -41,47 +41,46 @@ struct SessionRecord: Identifiable, Codable {
 }
 
 // MARK: - Design System
+// カラーコーディネート方針:
+//   ベース: ニュートラルな暗色（ほぼ黒）
+//   Work: 暖色系アクセント（銅／琥珀） — 集中と活力
+//   Free: 寒色系アクセント（ティール／シアン） — 休息と静寂
+//   トーン: 両アクセントとも彩度を抑え、明度を揃えることで統一感を確保
+//   超過: Work=セージグリーン（ポジティブ）、Free=コーラル（警告、攻撃的すぎない）
 
 struct AppTheme {
-    // --- Core Palette ---
-    // Work: Warm, deep tones
-    static let workPrimary = Color(hue: 0.02, saturation: 0.65, brightness: 0.28)     // Deep charcoal-brown
-    static let workGradientTop = Color(hue: 0.98, saturation: 0.50, brightness: 0.22)
-    static let workGradientBottom = Color(hue: 0.02, saturation: 0.70, brightness: 0.18)
-    static let workAccent = Color(hue: 0.08, saturation: 0.55, brightness: 0.90)       // Warm amber
+    // --- Base ---
+    static let bgPrimary   = Color(red: 0.07, green: 0.06, blue: 0.08)    // #110F14
+    static let bgSecondary = Color(red: 0.04, green: 0.04, blue: 0.05)    // #0B0A0D
+    static let surface     = Color(red: 0.11, green: 0.10, blue: 0.12)    // #1C1A1F
+    static let surfaceAlt  = Color(red: 0.14, green: 0.13, blue: 0.15)    // #242126
 
-    // Free: Cool, calm tones
-    static let freePrimary = Color(hue: 0.62, saturation: 0.55, brightness: 0.25)      // Deep navy-slate
-    static let freeGradientTop = Color(hue: 0.58, saturation: 0.45, brightness: 0.20)
-    static let freeGradientBottom = Color(hue: 0.65, saturation: 0.60, brightness: 0.15)
-    static let freeAccent = Color(hue: 0.55, saturation: 0.40, brightness: 0.85)       // Soft sky blue
+    // --- Work (暖色: 銅・琥珀) ---
+    static let workBgTop    = Color(red: 0.12, green: 0.09, blue: 0.07)   // 暖かいダークブラウン
+    static let workBgBottom = Color(red: 0.08, green: 0.05, blue: 0.04)
+    static let workAccent   = Color(red: 0.83, green: 0.58, blue: 0.38)   // #D4956A 銅・コッパー
 
-    // Semantic
-    static let overtimeWork = Color(hue: 0.38, saturation: 0.60, brightness: 0.85)     // Soft green (good)
-    static let overtimeFree = Color(hue: 0.0, saturation: 0.65, brightness: 0.90)      // Soft red (warning)
+    // --- Free (寒色: ティール・シアン) ---
+    static let freeBgTop    = Color(red: 0.06, green: 0.09, blue: 0.12)   // 冷たいダークネイビー
+    static let freeBgBottom = Color(red: 0.04, green: 0.05, blue: 0.08)
+    static let freeAccent   = Color(red: 0.42, green: 0.67, blue: 0.72)   // #6AABB8 ティール
 
-    // Neutral
-    static let surface = Color(hue: 0, saturation: 0, brightness: 0.10)                // Near-black
-    static let surfaceAlt = Color(hue: 0, saturation: 0, brightness: 0.14)
-    static let textPrimary = Color.white
-    static let textSecondary = Color.white.opacity(0.6)
-    static let textTertiary = Color.white.opacity(0.35)
+    // --- Semantic ---
+    static let overtimeGood = Color(red: 0.55, green: 0.75, blue: 0.51)   // #8CC082 セージグリーン
+    static let overtimeBad  = Color(red: 0.83, green: 0.48, blue: 0.48)   // #D47B7B コーラル
 
-    // Start screen
-    static let startGradientTop = Color(hue: 0, saturation: 0, brightness: 0.08)
-    static let startGradientBottom = Color(hue: 0, saturation: 0, brightness: 0.04)
+    // --- Text ---
+    static let textPrimary   = Color.white
+    static let textSecondary = Color.white.opacity(0.55)
+    static let textTertiary  = Color.white.opacity(0.25)
+    static let textDisabled  = Color.white.opacity(0.15)
 
-    // Calendar accent
-    static let chartBar = Color(hue: 0.08, saturation: 0.55, brightness: 0.80)
-
-    // Background gradient for timer
+    // --- Derived ---
     static func timerGradient(for mode: TimerMode) -> LinearGradient {
-        let colors: [Color]
         switch mode {
-        case .work: colors = [workGradientTop, workGradientBottom]
-        case .free: colors = [freeGradientTop, freeGradientBottom]
+        case .work: return LinearGradient(colors: [workBgTop, workBgBottom], startPoint: .top, endPoint: .bottom)
+        case .free: return LinearGradient(colors: [freeBgTop, freeBgBottom], startPoint: .top, endPoint: .bottom)
         }
-        return LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
     }
 
     static func accent(for mode: TimerMode) -> Color {
@@ -89,6 +88,10 @@ struct AppTheme {
         case .work: return workAccent
         case .free: return freeAccent
         }
+    }
+
+    static var startGradient: LinearGradient {
+        LinearGradient(colors: [bgPrimary, bgSecondary], startPoint: .top, endPoint: .bottom)
     }
 }
 

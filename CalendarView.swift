@@ -39,7 +39,7 @@ struct CalendarScreenView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.surface.ignoresSafeArea()
+                AppTheme.bgPrimary.ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
@@ -72,72 +72,51 @@ struct CalendarScreenView: View {
         }
     }
 
-    // MARK: - Month Selector
-
     private var monthSelector: some View {
         HStack {
-            Button {
-                moveMonth(by: -1)
-            } label: {
+            Button { moveMonth(by: -1) } label: {
                 Image(systemName: "chevron.left")
-                    .font(.title3)
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.title3).foregroundColor(AppTheme.textSecondary)
             }
-
             Spacer()
-
             Text(monthTitle)
-                .font(.title3)
-                .fontWeight(.semibold)
-                .foregroundColor(.white)
-
+                .font(.title3).fontWeight(.semibold).foregroundColor(.white)
             Spacer()
-
-            Button {
-                moveMonth(by: 1)
-            } label: {
+            Button { moveMonth(by: 1) } label: {
                 Image(systemName: "chevron.right")
-                    .font(.title3)
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.title3).foregroundColor(AppTheme.textSecondary)
             }
         }
         .padding(.horizontal)
     }
 
-    // MARK: - Month Summary
-
     private var monthSummarySection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("月間 Work 合計")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(AppTheme.textSecondary)
-                .tracking(1)
+                .foregroundColor(AppTheme.textSecondary).tracking(1)
             Text(formatDuration(monthTotalSeconds))
-                .font(.title)
-                .fontWeight(.bold)
+                .font(.title).fontWeight(.bold)
                 .foregroundColor(AppTheme.workAccent)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surfaceAlt)
+        .background(AppTheme.surface)
         .cornerRadius(14)
     }
-
-    // MARK: - Chart
 
     private var chartSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("日別 Work 時間")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(AppTheme.textSecondary)
-                .tracking(1)
+                .foregroundColor(AppTheme.textSecondary).tracking(1)
 
             Chart(dailyData, id: \.day) { item in
                 BarMark(
                     x: .value("日", item.day),
                     y: .value("分", Double(item.seconds) / 60.0)
                 )
-                .foregroundStyle(AppTheme.chartBar)
+                .foregroundStyle(AppTheme.workAccent.opacity(0.8))
                 .cornerRadius(2)
             }
             .frame(height: 180)
@@ -145,8 +124,7 @@ struct CalendarScreenView: View {
                 AxisMarks(values: .stride(by: 5)) { value in
                     AxisValueLabel {
                         if let v = value.as(Int.self) {
-                            Text("\(v)")
-                                .foregroundColor(AppTheme.textSecondary)
+                            Text("\(v)").foregroundColor(AppTheme.textSecondary)
                         }
                     }
                 }
@@ -157,31 +135,26 @@ struct CalendarScreenView: View {
                         .foregroundStyle(AppTheme.textTertiary)
                     AxisValueLabel {
                         if let v = value.as(Double.self) {
-                            Text("\(Int(v))")
-                                .foregroundColor(AppTheme.textSecondary)
+                            Text("\(Int(v))").foregroundColor(AppTheme.textSecondary)
                         }
                     }
                 }
             }
         }
         .padding()
-        .background(AppTheme.surfaceAlt)
+        .background(AppTheme.surface)
         .cornerRadius(14)
     }
-
-    // MARK: - History
 
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Work 履歴")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(AppTheme.textSecondary)
-                .tracking(1)
+                .foregroundColor(AppTheme.textSecondary).tracking(1)
 
             if monthRecords.isEmpty {
                 Text("この月の記録はありません")
-                    .foregroundColor(AppTheme.textSecondary)
-                    .padding(.vertical, 8)
+                    .foregroundColor(AppTheme.textSecondary).padding(.vertical, 8)
             } else {
                 ForEach(monthRecords) { record in
                     historyRow(record)
@@ -189,7 +162,7 @@ struct CalendarScreenView: View {
             }
         }
         .padding()
-        .background(AppTheme.surfaceAlt)
+        .background(AppTheme.surface)
         .cornerRadius(14)
     }
 
@@ -198,57 +171,32 @@ struct CalendarScreenView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(formatDate(record.date))
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white)
+                    .font(.subheadline).fontWeight(.medium).foregroundColor(.white)
                 Text(formatTime(record.date))
-                    .font(.caption)
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.caption).foregroundColor(AppTheme.textSecondary)
             }
-
             Spacer()
-
             Text(formatDuration(record.durationSeconds))
-                .font(.subheadline)
-                .fontWeight(.semibold)
+                .font(.subheadline).fontWeight(.semibold)
                 .foregroundColor(AppTheme.workAccent)
         }
         .padding(.vertical, 4)
-
         if record.id != monthRecords.last?.id {
             Divider().overlay(AppTheme.textTertiary)
         }
     }
 
-    // MARK: - Helpers
-
     private func moveMonth(by value: Int) {
-        if let newDate = calendar.date(byAdding: .month, value: value, to: selectedMonth) {
-            selectedMonth = newDate
-        }
+        if let d = calendar.date(byAdding: .month, value: value, to: selectedMonth) { selectedMonth = d }
     }
-
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.dateFormat = "M月d日(E)"
-        return formatter.string(from: date)
+        let f = DateFormatter(); f.locale = Locale(identifier: "ja_JP"); f.dateFormat = "M月d日(E)"; return f.string(from: date)
     }
-
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        let f = DateFormatter(); f.locale = Locale(identifier: "ja_JP"); f.dateFormat = "HH:mm"; return f.string(from: date)
     }
-
     private func formatDuration(_ seconds: Int) -> String {
-        let h = seconds / 3600
-        let m = (seconds % 3600) / 60
-        if h > 0 {
-            return "\(h)時間\(m)分"
-        } else {
-            return "\(m)分"
-        }
+        let h = seconds / 3600; let m = (seconds % 3600) / 60
+        return h > 0 ? "\(h)時間\(m)分" : "\(m)分"
     }
 }

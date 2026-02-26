@@ -7,18 +7,12 @@ struct StartView: View {
 
     var body: some View {
         ZStack {
-            // Dark gradient background
-            LinearGradient(
-                colors: [AppTheme.startGradientTop, AppTheme.startGradientBottom],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            AppTheme.startGradient.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer()
 
-                // Title area
+                // Branding
                 VStack(spacing: 8) {
                     Text("15")
                         .font(.system(size: 72, weight: .ultraLight, design: .rounded))
@@ -45,17 +39,11 @@ struct StartView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 22)
-                    .background(
-                        LinearGradient(
-                            colors: [AppTheme.workPrimary, AppTheme.workGradientBottom],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .background(AppTheme.workAccent.opacity(0.2))
                     .clipShape(RoundedRectangle(cornerRadius: 18))
                     .overlay(
                         RoundedRectangle(cornerRadius: 18)
-                            .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                            .strokeBorder(AppTheme.workAccent.opacity(0.35), lineWidth: 1)
                     )
                 }
 
@@ -75,24 +63,18 @@ struct StartView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 22)
-                    .background(
-                        LinearGradient(
-                            colors: [AppTheme.freePrimary, AppTheme.freeGradientBottom],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .background(AppTheme.freeAccent.opacity(0.15))
                     .clipShape(RoundedRectangle(cornerRadius: 18))
                     .overlay(
                         RoundedRectangle(cornerRadius: 18)
-                            .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                            .strokeBorder(AppTheme.freeAccent.opacity(0.3), lineWidth: 1)
                     )
                 }
 
                 Spacer()
                 Spacer()
 
-                // Bottom bar: Calendar & Settings
+                // Bottom toolbar
                 HStack(spacing: 0) {
                     Button {
                         showCalendar = true
@@ -118,7 +100,7 @@ struct StartView: View {
                             .padding(.vertical, 14)
                     }
                 }
-                .background(AppTheme.surfaceAlt)
+                .background(AppTheme.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .padding(.bottom, 20)
             }

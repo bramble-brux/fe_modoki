@@ -10,18 +10,17 @@ struct TimerView: View {
         let isFreeAlerting = (mode == .free && (phase == .alerting || isOvertime))
 
         ZStack {
-            // Gradient background
             AppTheme.timerGradient(for: mode)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Mode label - top area
+                // Mode label
                 modeHeader(mode: mode)
                     .padding(.top, 60)
 
                 Spacer()
 
-                // Timer display
+                // Timer
                 Text(TimeFormatHelper.format(seconds: timerManager.displaySeconds))
                     .font(.system(size: 88, weight: .ultraLight, design: .monospaced))
                     .foregroundColor(timerColor)
@@ -29,31 +28,27 @@ struct TimerView: View {
 
                 Spacer()
 
-                // Big forward button (main action)
+                // Big switch button
                 mainSwitchButton(mode: mode)
                     .padding(.bottom, 32)
 
-                // Small utility buttons
+                // Utility buttons
                 utilityButtons(phase: phase, isFreeAlerting: isFreeAlerting)
                     .padding(.bottom, 50)
             }
         }
     }
 
-    // MARK: - Timer Color
-
     private var timerColor: Color {
         let remaining = timerManager.target - timerManager.elapsed
         if remaining > 0 {
             return .white
         } else if timerManager.mode == .work {
-            return AppTheme.overtimeWork
+            return AppTheme.overtimeGood
         } else {
-            return AppTheme.overtimeFree
+            return AppTheme.overtimeBad
         }
     }
-
-    // MARK: - Mode Header
 
     @ViewBuilder
     private func modeHeader(mode: TimerMode) -> some View {
@@ -64,10 +59,8 @@ struct TimerView: View {
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .tracking(4)
         }
-        .foregroundColor(.white.opacity(0.5))
+        .foregroundColor(AppTheme.accent(for: mode).opacity(0.7))
     }
-
-    // MARK: - Main Switch Button (big)
 
     @ViewBuilder
     private func mainSwitchButton(mode: TimerMode) -> some View {
@@ -89,52 +82,48 @@ struct TimerView: View {
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 22)
-            .background(accentColor.opacity(0.25))
+            .background(accentColor.opacity(0.2))
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .strokeBorder(accentColor.opacity(0.5), lineWidth: 1.5)
+                    .strokeBorder(accentColor.opacity(0.4), lineWidth: 1.5)
             )
         }
         .padding(.horizontal, 32)
     }
 
-    // MARK: - Utility Buttons
-
     @ViewBuilder
     private func utilityButtons(phase: TimerPhase, isFreeAlerting: Bool) -> some View {
         HStack(spacing: 48) {
-            // Pause / Resume
-            if isFreeAlerting {
-                Color.clear.frame(width: 52, height: 52)
-            } else {
-                smallButton(
-                    icon: phase == .paused ? "play.fill" : "pause.fill"
-                ) {
-                    timerManager.togglePause()
-                }
+            // Pause / Resume — Free超過時は非活性（表示はするがdisabled）
+            smallButton(
+                icon: phase == .paused ? "play.fill" : "pause.fill",
+                disabled: isFreeAlerting
+            ) {
+                timerManager.togglePause()
             }
 
             // Stop
-            smallButton(icon: "stop.fill") {
+            smallButton(icon: "stop.fill", disabled: false) {
                 timerManager.finishSession()
             }
         }
     }
 
     @ViewBuilder
-    private func smallButton(icon: String, action: @escaping () -> Void) -> some View {
+    private func smallButton(icon: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 18))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(disabled ? AppTheme.textDisabled : AppTheme.textSecondary)
                 .frame(width: 52, height: 52)
-                .background(.white.opacity(0.08))
+                .background(disabled ? .white.opacity(0.03) : .white.opacity(0.08))
                 .clipShape(Circle())
                 .overlay(
                     Circle()
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                        .strokeBorder(disabled ? .white.opacity(0.05) : .white.opacity(0.12), lineWidth: 1)
                 )
         }
+        .disabled(disabled)
     }
 }

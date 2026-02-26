@@ -5,17 +5,11 @@ struct ResultView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [AppTheme.startGradientTop, AppTheme.startGradientBottom],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            AppTheme.startGradient.ignoresSafeArea()
 
             VStack(spacing: 32) {
                 Spacer()
 
-                // Check mark
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 64, weight: .ultraLight))
                     .foregroundColor(AppTheme.workAccent)
@@ -25,7 +19,6 @@ struct ResultView: View {
                     .fontWeight(.bold)
                     .foregroundColor(.white)
 
-                // Work合計時間
                 VStack(spacing: 8) {
                     Text("WORK 合計")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -38,7 +31,6 @@ struct ResultView: View {
 
                 Spacer()
 
-                // Back button
                 Button {
                     timerManager.reset()
                 } label: {
@@ -48,11 +40,11 @@ struct ResultView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .background(.white.opacity(0.1))
+                        .background(.white.opacity(0.08))
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
-                                .strokeBorder(.white.opacity(0.15), lineWidth: 1)
+                                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
                         )
                 }
                 .padding(.horizontal, 32)
