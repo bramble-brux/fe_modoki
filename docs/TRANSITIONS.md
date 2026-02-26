@@ -76,29 +76,38 @@ beginWith(.work) → sessionWorkSeconds = 0
 
 ## 5. アラート・通知タイミング
 
-| トリガー | 条件 | アラート音 | 通知ID |
-|---------|------|----------|--------|
-| Work 目標到達 | `alertInWork == true` かつ未発火 | 1回鳴動 | `TIMER_ALERT` |
-| Free 超過開始 | `elapsed >= target` | 鳴動開始 | `TIMER_ALERT` |
-| Free 超過中 | アプリ起動中3秒ごと | 繰り返し | — |
-| Free 超過中 | 60秒ごと | — | `TIMER_ALERT` |
-| バックグラウンド移行 | `phase == .running` かつ未超過 | — | `TIMER_ALERT_BG` |
+| トリガー | 条件 | アラート音 | 通知 |
+|---------|------|----------|------|
+| Work 目標到達 | `alertInWork == true` かつ未発火 | 1回鳴動 | 1回（`TIMER_ALERT`） |
+| Free 超過開始 | `elapsed >= target` | 鳴動開始 | 即時送信 |
+| Free 超過中（FG） | 10秒ごとタイマー | 10秒ごと | 10秒ごと（ユニークID） |
+| Free 超過中（BG） | BG遷移時に事前予約 | — | 10秒×30個予約 |
+| BG予約（Freeカウントダウン中） | `phase == .running` | — | 目標到達+超過通知を予約 |
+| BG予約（Work） | `phase == .running` | — | 1個予約（`TIMER_ALERT_BG_0`） |
 
 ## 6. バックグラウンド復帰ロジック
 
 ```
+バックグラウンド遷移:
+  backgroundDate = now
+  FGアラートタイマー停止
+  if phase == .running && !isOvertime:
+    BG通知予約（mode別）
+  if mode == .free && phase == .alerting:
+    10秒×30個のBG通知を予約
+
 フォアグラウンド復帰:
   if backgroundDate != nil:
     diff = now - backgroundDate
+    BG通知をすべてキャンセル
     if phase == .running:
       elapsed += diff
       if mode == .free && elapsed >= target:
         elapsed = target
         phase = .alerting
-        アラート再開（3秒間隔）
+        FGアラート再開（10秒間隔）
     if phase == .alerting:
-      アラート再開（3秒間隔）
+      FGアラート再開（10秒間隔）
     // phase == .paused の場合は何もしない
     backgroundDate = nil
-    キャンセル: TIMER_ALERT_BG
 ```
