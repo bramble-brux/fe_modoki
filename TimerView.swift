@@ -14,8 +14,8 @@ struct TimerView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Mode label
-                modeHeader(mode: mode)
+                // Mode indicator — large, colored, unmistakable
+                modeIndicator(mode: mode)
                     .padding(.top, 60)
 
                 Spacer()
@@ -50,16 +50,29 @@ struct TimerView: View {
         }
     }
 
+    // MARK: - Mode Indicator (prominent)
+
     @ViewBuilder
-    private func modeHeader(mode: TimerMode) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: mode == .work ? "flame.fill" : "cup.and.saucer.fill")
-                .font(.subheadline)
-            Text(mode == .work ? "WORK" : "FREE")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+    private func modeIndicator(mode: TimerMode) -> some View {
+        let accent = AppTheme.accent(for: mode)
+        let icon = mode == .work ? "flame.fill" : "cup.and.saucer.fill"
+        let label = mode == .work ? "WORK" : "FREE"
+
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+            Text(label)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
                 .tracking(4)
         }
-        .foregroundColor(AppTheme.accent(for: mode).opacity(0.7))
+        .foregroundColor(accent)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 10)
+        .background(accent.opacity(0.12))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule().strokeBorder(accent.opacity(0.25), lineWidth: 1)
+        )
     }
 
     @ViewBuilder
@@ -95,7 +108,6 @@ struct TimerView: View {
     @ViewBuilder
     private func utilityButtons(phase: TimerPhase, isFreeAlerting: Bool) -> some View {
         HStack(spacing: 48) {
-            // Pause / Resume — Free超過時は非活性（表示はするがdisabled）
             smallButton(
                 icon: phase == .paused ? "play.fill" : "pause.fill",
                 disabled: isFreeAlerting
@@ -103,7 +115,6 @@ struct TimerView: View {
                 timerManager.togglePause()
             }
 
-            // Stop
             smallButton(icon: "stop.fill", disabled: false) {
                 timerManager.finishSession()
             }

@@ -56,14 +56,14 @@ struct AppTheme {
     static let surfaceAlt  = Color(red: 0.14, green: 0.13, blue: 0.15)    // #242126
 
     // --- Work (暖色: 銅・琥珀) ---
-    static let workBgTop    = Color(red: 0.12, green: 0.09, blue: 0.07)   // 暖かいダークブラウン
-    static let workBgBottom = Color(red: 0.08, green: 0.05, blue: 0.04)
-    static let workAccent   = Color(red: 0.83, green: 0.58, blue: 0.38)   // #D4956A 銅・コッパー
+    static let workBgTop    = Color(red: 0.18, green: 0.10, blue: 0.07)   // はっきり暖かいダークブラウン
+    static let workBgBottom = Color(red: 0.12, green: 0.06, blue: 0.04)
+    static let workAccent   = Color(red: 0.87, green: 0.62, blue: 0.40)   // 銅・コッパー（少し明るめ）
 
     // --- Free (寒色: ティール・シアン) ---
-    static let freeBgTop    = Color(red: 0.06, green: 0.09, blue: 0.12)   // 冷たいダークネイビー
-    static let freeBgBottom = Color(red: 0.04, green: 0.05, blue: 0.08)
-    static let freeAccent   = Color(red: 0.42, green: 0.67, blue: 0.72)   // #6AABB8 ティール
+    static let freeBgTop    = Color(red: 0.05, green: 0.10, blue: 0.18)   // はっきり冷たいダークブルー
+    static let freeBgBottom = Color(red: 0.03, green: 0.06, blue: 0.12)
+    static let freeAccent   = Color(red: 0.45, green: 0.70, blue: 0.78)   // ティール（少し明るめ）
 
     // --- Semantic ---
     static let overtimeGood = Color(red: 0.55, green: 0.75, blue: 0.51)   // #8CC082 セージグリーン
