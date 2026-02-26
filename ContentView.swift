@@ -11,13 +11,6 @@ enum TimerMode: String, Codable {
     case work = "Work"
     case free = "Free"
 
-    var color: Color {
-        switch self {
-        case .work: return .indigo
-        case .free: return .mint
-        }
-    }
-
     var icon: String {
         switch self {
         case .work: return "dumbbell.fill"
@@ -46,8 +39,10 @@ struct SessionRecord: Identifiable, Codable {
     }
 
     var formattedDuration: String {
-        let m = durationSeconds / 60
+        let h = durationSeconds / 3600
+        let m = (durationSeconds % 3600) / 60
         let s = durationSeconds % 60
+        if h > 0 { return String(format: "%d:%02d:%02d", h, m, s) }
         return String(format: "%dm %02ds", m, s)
     }
 }
@@ -82,36 +77,28 @@ extension Color {
         Scanner(string: hex).scanHexInt64(&int)
         let a, r, g, b: UInt64
         switch hex.count {
-        case 3: // RGB (12-bit)
+        case 3:
             (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
+        case 6:
             (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
+        case 8:
             (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
         default:
-            (a, r, g, b) = (1, 1, 1, 0)
+            (a, r, g, b) = (255, 0, 0, 0)
         }
         self.init(.sRGB, red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255, opacity: Double(a) / 255)
-    }
-
-    func toHex() -> String {
-        let components = cgColor?.components ?? [0, 0, 0]
-        let r = Float(components[0])
-        let g = Float(components[1])
-        let b = Float(components[2])
-        return String(format: "%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255))
     }
 }
 
 // ──────────────────────────────────────────────
-// MARK: - App Phase
+// MARK: - App Phase & Screen
 // ──────────────────────────────────────────────
 
 enum AppPhase {
     case idle       // Before start
     case running    // Timer counting
     case paused     // Timer paused
-    case alerting   // Free target reached
+    case alerting   // Free target reached, alarm sounding
     case finished   // Session complete, showing summary
 }
 
@@ -120,6 +107,17 @@ enum AppScreen {
     case timer
     case calendar
     case result
+}
+
+// ──────────────────────────────────────────────
+// MARK: - Design Constants
+// ──────────────────────────────────────────────
+
+private enum Theme {
+    static let wineRed  = Color(hex: "722F37")
+    static let navy     = Color(hex: "000080")
+    static let success  = Color.green         // Work 超過時の文字色
+    static let warning  = Color.red           // Free 超過時の文字色
 }
 
 // ──────────────────────────────────────────────
@@ -159,10 +157,8 @@ struct ContentView: View {
     @AppStorage("workSeconds")  private var workSeconds  = 0
     @AppStorage("freeMinutes")  private var freeMinutes  = 15
     @AppStorage("freeSeconds")  private var freeSeconds  = 0
-    @AppStorage("alertInWork")  private var alertInWork  = true // User said Work alert persists in mock? Wait, spec says "Alert ON/OFF"
+    @AppStorage("alertInWork")  private var alertInWork  = true
     @AppStorage("history")      private var history: [SessionRecord] = []
-    @AppStorage("workHexColor") private var workHexColor = "4B0082" // Indigo
-    @AppStorage("freeHexColor") private var freeHexColor = "00F5D4" // Mint
 
     // ── Runtime state ──
     @StateObject private var notificationManager = NotificationManager()
@@ -171,14 +167,16 @@ struct ContentView: View {
     @State private var elapsed: Int        = 0
     @State private var phase: AppPhase     = .idle
     @State private var workAlertFired      = false
-    @State private var freeAlertCount      = 0 // To track 1-minute repeat notifications
+    @State private var freeAlertCount      = 0
+    @State private var showSettings        = false
 
     // ── Session aggregation ──
-    @State private var sessionWorkSeconds: Int = 0 // Temporary storage for current session result
+    @State private var sessionWorkSeconds: Int = 0
 
-    // ── Timer Helper ──
+    // ── Timer ──
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    // ── Computed ──
     private var target: Int {
         mode == .work
             ? workMinutes * 60 + workSeconds
@@ -189,29 +187,29 @@ struct ContentView: View {
         mode == .work && elapsed >= target
     }
 
-    private var isActive: Bool {
-        phase == .running || phase == .alerting
-    }
-
-    private var activeDisplayColor: Color {
-        if mode == .free && phase == .alerting { return .red }
-        if isOvertime { return Color.green } // Bright green for Work overtime
+    private var timerDisplayColor: Color {
+        if mode == .free && phase == .alerting { return Theme.warning }
+        if isOvertime { return Theme.success }
         return .white
     }
 
-    /// What to show on the timer display
     private var displayTime: String {
         if isOvertime {
-            // Work overtime: show how much past target
             return formatTime(elapsed - target)
         } else {
-            // Countdown: show remaining
-            let remaining = max(target - elapsed, 0)
-            return formatTime(remaining)
+            return formatTime(max(target - elapsed, 0))
         }
     }
 
-    // ── Body ──
+    private var backgroundColor: Color {
+        guard screen == .timer else { return .black }
+        return mode == .work ? Theme.wineRed : Theme.navy
+    }
+
+    // ──────────────────────────────────────────
+    // MARK: - Body
+    // ──────────────────────────────────────────
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -219,19 +217,15 @@ struct ContentView: View {
 
                 VStack(spacing: 0) {
                     switch screen {
-                    case .start:
-                        startView
-                    case .timer:
-                        timerView
-                    case .calendar:
-                        calendarView
-                    case .result:
-                        resultView
+                    case .start:    startView
+                    case .timer:    timerView
+                    case .calendar: calendarView
+                    case .result:   resultView
                     }
-                    
+
                     Spacer()
-                    
-                    Text("v2.0.0")
+
+                    Text("v2.0.1")
                         .font(.caption2)
                         .foregroundColor(.gray.opacity(0.4))
                         .padding(.bottom, 8)
@@ -242,8 +236,7 @@ struct ContentView: View {
                 SettingsView(
                     workMin: $workMinutes, workSec: $workSeconds,
                     freeMin: $freeMinutes, freeSec: $freeSeconds,
-                    alertInWork: $alertInWork,
-                    workHex: $workHexColor, freeHex: $freeHexColor
+                    alertInWork: $alertInWork
                 )
             }
             .onAppear(perform: requestNotificationPermission)
@@ -254,29 +247,19 @@ struct ContentView: View {
                     notificationManager.actionReceived = false
                 }
             }
-            .onChange(of: scenePhase) { oldPhase, newPhase in
+            .onChange(of: scenePhase) { _, newPhase in
                 handleScenePhaseChange(newPhase)
             }
         }
     }
 
-    private var backgroundColor: Color {
-        if screen == .timer {
-            if mode == .free && phase == .alerting { return Color(hex: "000080") } // Navy
-            return mode == .work ? Color(hex: "722F37") : Color(hex: "000080") // Wine Red / Navy
-        }
-        return .black
-    }
-
-    @State private var showSettings = false
-
     // ──────────────────────────────────────────
-    // MARK: - Screen Views
+    // MARK: - Start Screen
     // ──────────────────────────────────────────
 
     private var startView: some View {
         VStack(spacing: 60) {
-            Spacer().frame(height: 40)
+            Spacer()
 
             HStack(spacing: 30) {
                 modeStartButton(.work)
@@ -285,24 +268,26 @@ struct ContentView: View {
 
             HStack(spacing: 60) {
                 Button { screen = .calendar } label: {
-                    VStack {
+                    VStack(spacing: 6) {
                         Image(systemName: "calendar").font(.title)
                         Text("カレンダー").font(.caption)
-                    }.foregroundColor(.white)
+                    }.foregroundColor(.white.opacity(0.7))
                 }
                 Button { showSettings = true } label: {
-                    VStack {
+                    VStack(spacing: 6) {
                         Image(systemName: "gearshape.fill").font(.title)
                         Text("設定").font(.caption)
-                    }.foregroundColor(.white)
+                    }.foregroundColor(.white.opacity(0.7))
                 }
             }
-            .padding(.top, 20)
+
+            Spacer()
         }
     }
 
     private func modeStartButton(_ m: TimerMode) -> some View {
-        Button { beginWith(m) } label: {
+        let bg = m == .work ? Theme.wineRed : Theme.navy
+        return Button { beginWith(m) } label: {
             VStack(spacing: 12) {
                 Image(systemName: m.icon)
                     .font(.system(size: 40))
@@ -313,15 +298,19 @@ struct ContentView: View {
             .frame(width: 130, height: 130)
             .background(
                 RoundedRectangle(cornerRadius: 30)
-                    .fill(m == .work ? Color(hex: "722F37") : Color(hex: "000080")) // Wine Red / Navy
-                    .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+                    .fill(bg)
+                    .shadow(color: bg.opacity(0.5), radius: 12, y: 6)
             )
         }
     }
 
+    // ──────────────────────────────────────────
+    // MARK: - Timer Screen
+    // ──────────────────────────────────────────
+
     private var timerView: some View {
         VStack(spacing: 0) {
-            // Mode icon + label
+            // Mode header
             HStack(spacing: 12) {
                 Image(systemName: mode.icon)
                 Text(mode.rawValue)
@@ -332,17 +321,18 @@ struct ContentView: View {
 
             Spacer()
 
-            // Timer Display
+            // Timer display
             Text(displayTime)
                 .font(.system(size: 100, weight: .thin, design: .monospaced))
-                .foregroundColor(activeDisplayColor)
+                .foregroundColor(timerDisplayColor)
                 .padding(.vertical, 20)
+                .contentTransition(.numericText())
 
             Spacer()
 
             // Controls
             VStack(spacing: 30) {
-                // Large Next Button
+                // 大ボタン: モード切り替え
                 Button { stopAndSwitch() } label: {
                     Text(mode == .work ? "Free へ" : "Work へ")
                         .font(.title2.bold())
@@ -352,53 +342,65 @@ struct ContentView: View {
                         .background(Capsule().fill(Color.white))
                         .padding(.horizontal, 40)
                 }
-                .disabled(mode == .free && phase == .alerting && elapsed >= target) // Free overtime shouldn't disable Next, but spec says "Workへボタン(大)" is available.
 
-                HStack(spacing: 40) {
-                    // Constant layout for Pause/Finish buttons
-                    // Use opacity and disabled state to keep positions stable
-                    Button {
-                        if phase == .running { phase = .paused }
-                        else if phase == .paused { phase = .running }
-                    } label: {
-                        VStack {
-                            Image(systemName: phase == .paused ? "play.fill" : "pause.fill")
-                                .font(.title)
-                            Text(phase == .paused ? "再開" : "一時停止")
-                                .font(.caption)
+                // 小ボタン: 一時停止 & 終了（固定レイアウト）
+                HStack(spacing: 0) {
+                    // 一時停止 / 再開
+                    Group {
+                        if mode == .free && phase == .alerting {
+                            // Free 超過時は一時停止非表示（でもスペース維持）
+                            Color.clear
+                        } else {
+                            Button {
+                                if phase == .running { phase = .paused }
+                                else if phase == .paused { phase = .running }
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: phase == .paused ? "play.fill" : "pause.fill")
+                                        .font(.title)
+                                    Text(phase == .paused ? "再開" : "一時停止")
+                                        .font(.caption)
+                                }
+                                .foregroundColor(.white.opacity(0.8))
+                            }
                         }
-                        .frame(width: 80)
                     }
-                    .opacity(mode == .free && phase == .alerting ? 0 : 1)
-                    .disabled(mode == .free && phase == .alerting)
+                    .frame(width: 100, height: 60)
 
-                    // Finish
+                    Spacer().frame(width: 40)
+
+                    // 終了
                     Button { finishSession() } label: {
-                        VStack {
+                        VStack(spacing: 4) {
                             Image(systemName: "flag.checkered")
                                 .font(.title)
                             Text("終了")
                                 .font(.caption)
                         }
-                        .frame(width: 80)
+                        .foregroundColor(.white.opacity(0.8))
                     }
+                    .frame(width: 100, height: 60)
                 }
-                .foregroundColor(.white.opacity(0.8))
             }
             .padding(.bottom, 60)
         }
     }
 
+    // ──────────────────────────────────────────
+    // MARK: - Result Screen
+    // ──────────────────────────────────────────
+
     private var resultView: some View {
         VStack(spacing: 30) {
-            VStack(spacing: 10) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(.green)
-                Text("お疲れ様でした")
-                    .font(.title.bold())
-            }
-            .padding(.top, 60)
+            Spacer()
+
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 80))
+                .foregroundColor(Theme.success)
+
+            Text("お疲れ様でした")
+                .font(.title.bold())
+                .foregroundColor(.white)
 
             VStack(spacing: 8) {
                 Text("今回の Work 合計時間")
@@ -409,7 +411,7 @@ struct ContentView: View {
                     .foregroundColor(.white)
             }
             .padding(30)
-            .background(RoundedRectangle(cornerRadius: 20).fill(Color.white.opacity(0.05)))
+            .background(RoundedRectangle(cornerRadius: 20).fill(Color.white.opacity(0.06)))
 
             Spacer()
 
@@ -425,6 +427,10 @@ struct ContentView: View {
         }
     }
 
+    // ──────────────────────────────────────────
+    // MARK: - Calendar Screen
+    // ──────────────────────────────────────────
+
     private var calendarView: some View {
         HistoryView(records: $history, onDismiss: { screen = .start })
     }
@@ -438,9 +444,9 @@ struct ContentView: View {
         elapsed = 0
         workAlertFired = false
         sessionWorkSeconds = 0
-        phase = .running
-                screen = .timer
         freeAlertCount = 0
+        phase = .running
+        screen = .timer
     }
 
     private func stopAndSwitch() {
@@ -454,7 +460,12 @@ struct ContentView: View {
 
     private func finishSession() {
         if mode == .work { sessionWorkSeconds += elapsed }
-        recordSession()
+        // Only record if there was actual Work time
+        if sessionWorkSeconds > 0 {
+            let record = SessionRecord(mode: .work, durationSeconds: sessionWorkSeconds)
+            history.insert(record, at: 0)
+            if history.count > 100 { history.removeLast() }
+        }
         screen = .result
         phase = .finished
     }
@@ -465,19 +476,21 @@ struct ContentView: View {
     }
 
     // ──────────────────────────────────────────
-    // MARK: - Timer logic
+    // MARK: - Timer Logic
     // ──────────────────────────────────────────
 
     private func handleTick() {
+        // Free alerting: sound loop + periodic notifications
         if phase == .alerting {
-            // Free mode overtime notification logic
-            if mode == .free && elapsed >= target {
-                // Check if 60 seconds passed since last alert count
-                let overtime = elapsed - target
-                let currentCount = overtime / 60
-                if currentCount > freeAlertCount {
-                    freeAlertCount = currentCount
-                    scheduleNotification(title: "workの時間です", body: "free時間を\(currentCount)分超過しています。")
+            if mode == .free {
+                // elapsed は target で停止済み。経過秒数だけ追跡して通知回数を管理
+                freeAlertCount += 1
+                if freeAlertCount % 60 == 0 {
+                    let mins = freeAlertCount / 60
+                    scheduleNotification(
+                        title: "workの時間です",
+                        body: "free時間を\(mins)分超過しています。"
+                    )
                 }
             }
             playSound()
@@ -493,6 +506,7 @@ struct ContentView: View {
             if elapsed >= target {
                 elapsed = target
                 phase = .alerting
+                freeAlertCount = 0
                 scheduleNotification(title: "workの時間です", body: "free時間を超過しています。")
             }
         case .work:
@@ -507,13 +521,6 @@ struct ContentView: View {
     // ──────────────────────────────────────────
     // MARK: - Helpers
     // ──────────────────────────────────────────
-
-    private func recordSession() {
-        guard elapsed > 0 else { return }
-        let record = SessionRecord(mode: mode, durationSeconds: elapsed)
-        history.insert(record, at: 0)
-        if history.count > 50 { history.removeLast() }
-    }
 
     private func formatTime(_ total: Int) -> String {
         let h = total / 3600
@@ -534,15 +541,13 @@ struct ContentView: View {
     private func requestNotificationPermission() {
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            if granted {
-                setupNotificationActions()
-            }
+            if granted { setupNotificationActions() }
         }
     }
 
     private func setupNotificationActions() {
-        let stopAction = UNNotificationAction(identifier: "STOP_ACTION", title: "STOP / 次へ", options: [.foreground])
-        let category = UNNotificationCategory(identifier: "TIMER_CATEGORY", actions: [stopAction], intentIdentifiers: [], options: [])
+        let action = UNNotificationAction(identifier: "STOP_ACTION", title: "STOP / 次へ", options: [.foreground])
+        let category = UNNotificationCategory(identifier: "TIMER_CATEGORY", actions: [action], intentIdentifiers: [], options: [])
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
@@ -558,7 +563,8 @@ struct ContentView: View {
             trigger = UNTimeIntervalNotificationTrigger(timeInterval: d, repeats: false)
         }
 
-        let request = UNNotificationRequest(identifier: "TIMER_ALERT", content: content, trigger: trigger)
+        let id = delay != nil ? "TIMER_ALERT_BG" : "TIMER_ALERT"
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request)
     }
 
@@ -570,29 +576,34 @@ struct ContentView: View {
         switch newScenePhase {
         case .background:
             backgroundDate = Date()
-            // Schedule future notification if timer is running
-            if self.phase == .running && !isOvertime {
+            // バックグラウンド移行時に目標到達の通知を予約
+            if phase == .running && !isOvertime {
                 let remaining = TimeInterval(target - elapsed)
                 if remaining > 0 {
-                    let title = mode == .work ? "Work 目標達成" : "Free 終了"
-                    let body = mode == .work ? "お疲れ様です！延長も可能です。" : "Work に切り替えてください"
+                    let title = mode == .work
+                        ? "work終了です、お疲れ様でした"
+                        : "workの時間です"
+                    let body = mode == .work
+                        ? ""
+                        : "free時間を超過しています。"
                     scheduleNotification(title: title, body: body, delay: remaining)
                 }
             }
         case .active:
             if let start = backgroundDate {
                 let diff = Int(Date().timeIntervalSince(start))
-                if self.phase == .running {
+                if phase == .running {
                     elapsed += diff
-                    // Catch up logic: check if we should be alerting now
                     if mode == .free && elapsed >= target {
                         elapsed = target
-                        self.phase = .alerting
+                        phase = .alerting
+                        freeAlertCount = 0
                     }
-                    // For Work mode, it just continues as overtime, color changes automatically
+                } else if phase == .paused {
+                    // Paused 中はタイマーを進めない
                 }
                 backgroundDate = nil
-                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["TIMER_ALERT"])
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["TIMER_ALERT_BG"])
             }
         default:
             break
@@ -611,114 +622,97 @@ struct SettingsView: View {
     @Binding var freeMin: Int
     @Binding var freeSec: Int
     @Binding var alertInWork: Bool
-    @Binding var workHex: String
-    @Binding var freeHex: String
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    HStack {
-                        Image(systemName: "dumbbell.fill").foregroundColor(.white)
-                        Text("分")
-                        Spacer()
-                        Picker("", selection: $workMin) {
-                            ForEach(0...120, id: \.self) { Text("\($0)").tag($0) }
-                        }.pickerStyle(.menu)
-                    }
-                    HStack {
-                        Image(systemName: "clock").foregroundColor(.white)
-                        Text("秒")
-                        Spacer()
-                        Picker("", selection: $workSec) {
-                            ForEach(0...59, id: \.self) { Text("\($0)").tag($0) }
-                        }.pickerStyle(.menu)
-                    }
+                    durationRow(icon: "dumbbell.fill", label: "分", selection: $workMin, range: 0...120)
+                    durationRow(icon: "clock",         label: "秒", selection: $workSec, range: 0...59)
                 } header: {
-                    Text("仕事の時間").foregroundColor(.white)
+                    Text("仕事の時間")
                 }
 
                 Section {
-                    HStack {
-                        Image(systemName: "gamecontroller.fill").foregroundColor(.white)
-                        Text("分")
-                        Spacer()
-                        Picker("", selection: $freeMin) {
-                            ForEach(0...120, id: \.self) { Text("\($0)").tag($0) }
-                        }.pickerStyle(.menu)
-                    }
-                    HStack {
-                        Image(systemName: "clock").foregroundColor(.white)
-                        Text("秒")
-                        Spacer()
-                        Picker("", selection: $freeSec) {
-                            ForEach(0...59, id: \.self) { Text("\($0)").tag($0) }
-                        }.pickerStyle(.menu)
-                    }
+                    durationRow(icon: "gamecontroller.fill", label: "分", selection: $freeMin, range: 0...120)
+                    durationRow(icon: "clock",               label: "秒", selection: $freeSec, range: 0...59)
                 } header: {
-                    Text("休憩の時間").foregroundColor(.white)
+                    Text("休憩の時間")
                 }
 
                 Section {
                     Toggle(isOn: $alertInWork) {
                         HStack {
-                            Image(systemName: "bell.fill").foregroundColor(.white)
+                            Image(systemName: "bell.fill")
                             Text("Work目標達成時に通知")
                         }
                     }
                 } header: {
-                    Text("通知設定").foregroundColor(.white)
+                    Text("通知設定")
                 }
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
             .preferredColorScheme(.dark)
-            .foregroundColor(.white)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") { dismiss() }.fontWeight(.bold).foregroundColor(.white)
+                    Button("完了") { dismiss() }.fontWeight(.bold)
                 }
             }
+        }
+    }
+
+    private func durationRow(icon: String, label: String, selection: Binding<Int>, range: ClosedRange<Int>) -> some View {
+        HStack {
+            Image(systemName: icon)
+            Text(label)
+            Spacer()
+            Picker("", selection: selection) {
+                ForEach(range, id: \.self) { Text("\($0)").tag($0) }
+            }.pickerStyle(.menu)
         }
     }
 }
 
 // ──────────────────────────────────────────────
-// MARK: - HistoryView
+// MARK: - HistoryView (カレンダー)
 // ──────────────────────────────────────────────
 
 struct HistoryView: View {
     @Binding var records: [SessionRecord]
     var onDismiss: () -> Void
     @State private var editMode: EditMode = .inactive
-    
-    // Aggregation logic for chart
+
+    // Work 記録のみ表示
+    private var workRecords: [SessionRecord] {
+        records.filter { $0.mode == .work }
+    }
+
+    // 月間チャート用データ
     struct DailyTotal: Identifiable {
         let id = UUID()
         let day: Int
         let seconds: Int
     }
-    
+
     private var chartData: [DailyTotal] {
-        let calendar = Calendar.current
-        let currentMonth = calendar.component(.month, from: Date())
-        let currentYear = calendar.component(.year, from: Date())
-        
-        let filtered = records.filter { r in
-            r.mode == .work &&
-            calendar.component(.month, from: r.date) == currentMonth &&
-            calendar.component(.year, from: r.date) == currentYear
-        }
-        
+        let cal = Calendar.current
+        let now = Date()
+        let month = cal.component(.month, from: now)
+        let year  = cal.component(.year, from: now)
+
         var dailyMap: [Int: Int] = [:]
-        for r in filtered {
-            let day = calendar.component(.day, from: r.date)
-            dailyMap[day, default: 0] += r.durationSeconds
+        for r in workRecords {
+            if cal.component(.month, from: r.date) == month &&
+               cal.component(.year, from: r.date) == year {
+                let day = cal.component(.day, from: r.date)
+                dailyMap[day, default: 0] += r.durationSeconds
+            }
         }
-        
-        return dailyMap.map { DailyTotal(day: $0.key, seconds: $0.value) }.sorted { $0.day < $1.day }
+        return dailyMap.map { DailyTotal(day: $0.key, seconds: $0.value) }
+                       .sorted { $0.day < $1.day }
     }
-    
+
     private var monthlyWorkTotal: Int {
         chartData.reduce(0) { $0 + $1.seconds }
     }
@@ -726,77 +720,80 @@ struct HistoryView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
+                // ── 月間統計 ──
+                Section("月間統計") {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             VStack(alignment: .leading) {
-                                Text("今月の Work 合計").font(.caption).foregroundColor(.gray)
-                                Text(formatSeconds(monthlyWorkTotal))
+                                Text("今月の Work 合計")
+                                    .font(.caption).foregroundColor(.gray)
+                                Text(formatHM(monthlyWorkTotal))
                                     .font(.title.bold())
-                                    .foregroundColor(.white)
                             }
                             Spacer()
-                            Image(systemName: "chart.bar.fill").foregroundColor(.gray)
                         }
-                        
+
                         if !chartData.isEmpty {
                             Chart(chartData) { item in
                                 BarMark(
                                     x: .value("Day", item.day),
-                                    y: .value("Seconds", item.seconds)
+                                    y: .value("Minutes", item.seconds / 60)
                                 )
-                                .foregroundStyle(Color.green.gradient)
+                                .foregroundStyle(Theme.success.gradient)
+                                .cornerRadius(3)
                             }
                             .frame(height: 100)
-                            .chartXAxis {
-                                AxisMarks(values: .stride(by: 5))
-                            }
+                            .chartXAxisLabel("日")
+                            .chartYAxisLabel("分")
                         } else {
-                            Text("データがありません").font(.caption).foregroundColor(.secondary)
+                            Text("データがありません")
+                                .font(.caption).foregroundColor(.secondary)
                         }
                     }
                     .padding(.vertical, 8)
-                } header: {
-                    Text("月間統計")
                 }
 
-                if records.isEmpty {
-                    VStack(spacing: 20) {
-                        Spacer().frame(height: 40)
-                        Image(systemName: "calendar.badge.exclamationmark")
-                            .font(.system(size: 48))
-                            .foregroundColor(.gray)
-                        Text("履歴がありません")
-                            .foregroundColor(.secondary)
+                // ── 履歴リスト ──
+                if workRecords.isEmpty {
+                    Section {
+                        VStack(spacing: 16) {
+                            Image(systemName: "calendar.badge.exclamationmark")
+                                .font(.system(size: 48))
+                                .foregroundColor(.gray)
+                            Text("履歴がありません")
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 30)
+                        .listRowBackground(Color.clear)
                     }
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
                 } else {
                     Section("Work 履歴") {
                         ForEach($records) { $r in
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(r.date, style: .date)
-                                            .font(.caption)
-                                            .foregroundColor(.gray)
-                                        Text(r.date, style: .time)
-                                            .font(.caption2)
-                                            .foregroundColor(.gray)
+                            if r.mode == .work {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(r.date, style: .date)
+                                                .font(.caption)
+                                                .foregroundColor(.gray)
+                                            Text(r.date, style: .time)
+                                                .font(.caption2)
+                                                .foregroundColor(.gray.opacity(0.7))
+                                        }
+                                        Spacer()
+                                        Text(r.formattedDuration)
+                                            .font(.system(.body, design: .monospaced))
                                     }
-                                    Spacer()
-                                    Text(r.formattedDuration)
-                                        .font(.system(.body, design: .monospaced))
-                                        .foregroundColor(.white)
+
+                                    TextField("メモ...", text: $r.notes)
+                                        .font(.caption)
+                                        .padding(8)
+                                        .background(Color.white.opacity(0.05))
+                                        .cornerRadius(8)
                                 }
-                                
-                                TextField("メモ...", text: $r.notes)
-                                    .font(.caption)
-                                    .padding(8)
-                                    .background(Color.white.opacity(0.05))
-                                    .cornerRadius(8)
+                                .padding(.vertical, 4)
                             }
-                            .padding(.vertical, 4)
                         }
                         .onDelete { records.remove(atOffsets: $0) }
                     }
@@ -808,11 +805,10 @@ struct HistoryView: View {
             .environment(\.editMode, $editMode)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: {
+                    Button {
                         editMode = (editMode == .inactive) ? .active : .inactive
-                    }) {
+                    } label: {
                         Image(systemName: editMode == .inactive ? "pencil.circle" : "checkmark.circle.fill")
-                            .foregroundColor(.white)
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -824,8 +820,8 @@ struct HistoryView: View {
             }
         }
     }
-    
-    private func formatSeconds(_ total: Int) -> String {
+
+    private func formatHM(_ total: Int) -> String {
         let h = total / 3600
         let m = (total % 3600) / 60
         return String(format: "%dh %02dm", h, m)
