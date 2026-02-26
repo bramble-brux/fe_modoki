@@ -1,39 +1,23 @@
-# 状態遷移図 - v2.0.0
+# 状態遷移定義 - v2.0.1
 
-## 遷移図
+## 1. 画面遷移図
 
 ```mermaid
 graph TD
-    StartView[開始画面] -->|Workボタン| WorkTimer[Work: カウントダウン]
-    StartView -->|Freeボタン| FreeTimer[Free: カウントダウン]
-    StartView -->|カレンダー| CalendarView[カレンダー・統計]
-    StartView -->|設定| SettingsView[設定画面]
+    Start[開始画面] -->|Workスタート| TimerW[タイマー: Work]
+    Start -->|Freeスタート| TimerF[タイマー: Free]
+    Start -->|カレンダー| Calendar[カレンダー]
+    Start -->|設定| Settings[設定]
 
-    WorkTimer -->|一時停止| WorkPaused[Work: 一時停止]
-    WorkPaused -->|再開| WorkTimer
+    TimerW -->|Freeへ| Record[記録] --> TimerF
+    TimerF -->|Workへ| Record --> TimerW
     
-    WorkTimer -->|目標到達| WorkOver[Work: 超過カウントアップ]
-    WorkTimer -->|Freeへ| RecordW[記録保存]
-    WorkOver -->|Freeへ| RecordW
-    RecordW --> FreeTimer
-
-    FreeTimer -->|一時停止| FreePaused[Free: 一時停止]
-    FreePaused -->|再開| FreeTimer
-
-    FreeTimer -->|目標到達| FreeAlert[Free: 超過アラート停止]
-    FreeTimer -->|Workへ| RecordF[記録保存]
-    FreeAlert -->|Workへ| RecordF
-    RecordF --> WorkTimer
-
-    WorkTimer -->|終了| ResultView[完了画面]
-    WorkOver -->|終了| ResultView
-    FreeTimer -->|終了| ResultView
-    FreeAlert -->|終了| ResultView
-
-    ResultView -->|スタートに戻る| StartView
+    TimerW -->|終了| Result[完了画面]
+    TimerF -->|終了| Result
+    
+    Result -->|スタートに戻る| Start
 ```
 
-## 状態詳細
 
 | 画面/状態 | アイコン | 計測方式 | ボタン構成 (大 / 小) |
 |-----------|----------|----------|----------------------|

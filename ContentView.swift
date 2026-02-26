@@ -195,7 +195,7 @@ struct ContentView: View {
 
     private var activeDisplayColor: Color {
         if mode == .free && phase == .alerting { return .red }
-        if isOvertime { return .green } // System green is bright and standard
+        if isOvertime { return Color.green } // Bright green for Work overtime
         return .white
     }
 
@@ -262,8 +262,8 @@ struct ContentView: View {
 
     private var backgroundColor: Color {
         if screen == .timer {
-            if mode == .free && phase == .alerting { return .red }
-            return mode == .work ? Color(hex: workHexColor) : Color(hex: freeHexColor)
+            if mode == .free && phase == .alerting { return Color(hex: "000080") } // Navy
+            return mode == .work ? Color(hex: "722F37") : Color(hex: "000080") // Wine Red / Navy
         }
         return .black
     }
@@ -275,41 +275,26 @@ struct ContentView: View {
     // ──────────────────────────────────────────
 
     private var startView: some View {
-        VStack(spacing: 40) {
-            // App Icon Mockup area (Visual)
-            VStack {
-                ZStack {
-                    Circle().fill(Color.gray.opacity(0.1))
-                        .frame(width: 120, height: 120)
-                    Image(systemName: "alarm.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(.white)
-                    Text("15")
-                        .font(.system(size: 20, weight: .bold))
-                        .offset(y: 4)
-                }
-                Text("作業管理タイマー")
-                    .font(.title2.bold())
-            }
-            .padding(.top, 40)
+        VStack(spacing: 60) {
+            Spacer().frame(height: 40)
 
             HStack(spacing: 30) {
                 modeStartButton(.work)
                 modeStartButton(.free)
             }
 
-            HStack(spacing: 40) {
+            HStack(spacing: 60) {
                 Button { screen = .calendar } label: {
                     VStack {
                         Image(systemName: "calendar").font(.title)
                         Text("カレンダー").font(.caption)
-                    }.foregroundColor(.gray)
+                    }.foregroundColor(.white)
                 }
                 Button { showSettings = true } label: {
                     VStack {
                         Image(systemName: "gearshape.fill").font(.title)
                         Text("設定").font(.caption)
-                    }.foregroundColor(.gray)
+                    }.foregroundColor(.white)
                 }
             }
             .padding(.top, 20)
@@ -328,8 +313,8 @@ struct ContentView: View {
             .frame(width: 130, height: 130)
             .background(
                 RoundedRectangle(cornerRadius: 30)
-                    .fill(m == .work ? Color(hex: workHexColor) : Color(hex: freeHexColor))
-                    .shadow(color: (m == .work ? Color(hex: workHexColor) : Color(hex: freeHexColor)).opacity(0.3), radius: 10, y: 5)
+                    .fill(m == .work ? Color(hex: "722F37") : Color(hex: "000080")) // Wine Red / Navy
+                    .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
             )
         }
     }
@@ -339,7 +324,7 @@ struct ContentView: View {
             // Mode icon + label
             HStack(spacing: 12) {
                 Image(systemName: mode.icon)
-                Text(mode.rawValue + (isOvertime ? " (超過)" : ""))
+                Text(mode.rawValue)
             }
             .font(.system(size: 24, weight: .bold, design: .rounded))
             .foregroundColor(.white)
@@ -350,7 +335,7 @@ struct ContentView: View {
             // Timer Display
             Text(displayTime)
                 .font(.system(size: 100, weight: .thin, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundColor(activeDisplayColor)
                 .padding(.vertical, 20)
 
             Spacer()
@@ -369,8 +354,9 @@ struct ContentView: View {
                 }
                 .disabled(mode == .free && phase == .alerting && elapsed >= target) // Free overtime shouldn't disable Next, but spec says "Workへボタン(大)" is available.
 
-                HStack(spacing: 60) {
-                    // Pause/Resume
+                HStack(spacing: 40) {
+                    // Constant layout for Pause/Finish buttons
+                    // Use opacity and disabled state to keep positions stable
                     Button {
                         if phase == .running { phase = .paused }
                         else if phase == .paused { phase = .running }
@@ -381,7 +367,9 @@ struct ContentView: View {
                             Text(phase == .paused ? "再開" : "一時停止")
                                 .font(.caption)
                         }
+                        .frame(width: 80)
                     }
+                    .opacity(mode == .free && phase == .alerting ? 0 : 1)
                     .disabled(mode == .free && phase == .alerting)
 
                     // Finish
@@ -392,6 +380,7 @@ struct ContentView: View {
                             Text("終了")
                                 .font(.caption)
                         }
+                        .frame(width: 80)
                     }
                 }
                 .foregroundColor(.white.opacity(0.8))
@@ -437,7 +426,7 @@ struct ContentView: View {
     }
 
     private var calendarView: some View {
-        HistoryView(records: $history) // Temporary, will enhance CalendarView later
+        HistoryView(records: $history, onDismiss: { screen = .start })
     }
 
     // ──────────────────────────────────────────
@@ -450,12 +439,11 @@ struct ContentView: View {
         workAlertFired = false
         sessionWorkSeconds = 0
         phase = .running
-        screen = .timer
+                screen = .timer
         freeAlertCount = 0
     }
 
     private func stopAndSwitch() {
-        recordSession()
         if mode == .work { sessionWorkSeconds += elapsed }
         mode = mode.opposite
         elapsed = 0
@@ -465,8 +453,8 @@ struct ContentView: View {
     }
 
     private func finishSession() {
-        recordSession()
         if mode == .work { sessionWorkSeconds += elapsed }
+        recordSession()
         screen = .result
         phase = .finished
     }
@@ -631,77 +619,64 @@ struct SettingsView: View {
             Form {
                 Section {
                     HStack {
-                        Image(systemName: "dumbbell.fill").foregroundColor(Color(hex: workHex))
-                        Text("Minutes")
+                        Image(systemName: "dumbbell.fill").foregroundColor(.white)
+                        Text("分")
                         Spacer()
                         Picker("", selection: $workMin) {
                             ForEach(0...120, id: \.self) { Text("\($0)").tag($0) }
                         }.pickerStyle(.menu)
                     }
                     HStack {
-                        Image(systemName: "clock").foregroundColor(Color(hex: workHex))
-                        Text("Seconds")
+                        Image(systemName: "clock").foregroundColor(.white)
+                        Text("秒")
                         Spacer()
                         Picker("", selection: $workSec) {
                             ForEach(0...59, id: \.self) { Text("\($0)").tag($0) }
                         }.pickerStyle(.menu)
                     }
-                    HStack {
-                        Text("Color (Hex)")
-                        Spacer()
-                        TextField("4B0082", text: $workHex)
-                            .multilineTextAlignment(.trailing)
-                            .font(.system(.body, design: .monospaced))
-                    }
                 } header: {
-                    Text("Work Duration & Color").foregroundColor(Color(hex: workHex))
+                    Text("仕事の時間").foregroundColor(.white)
                 }
 
                 Section {
                     HStack {
-                        Image(systemName: "gamecontroller.fill").foregroundColor(Color(hex: freeHex))
-                        Text("Minutes")
+                        Image(systemName: "gamecontroller.fill").foregroundColor(.white)
+                        Text("分")
                         Spacer()
                         Picker("", selection: $freeMin) {
                             ForEach(0...120, id: \.self) { Text("\($0)").tag($0) }
                         }.pickerStyle(.menu)
                     }
                     HStack {
-                        Image(systemName: "clock").foregroundColor(Color(hex: freeHex))
-                        Text("Seconds")
+                        Image(systemName: "clock").foregroundColor(.white)
+                        Text("秒")
                         Spacer()
                         Picker("", selection: $freeSec) {
                             ForEach(0...59, id: \.self) { Text("\($0)").tag($0) }
                         }.pickerStyle(.menu)
                     }
-                    HStack {
-                        Text("Color (Hex)")
-                        Spacer()
-                        TextField("00F5D4", text: $freeHex)
-                            .multilineTextAlignment(.trailing)
-                            .font(.system(.body, design: .monospaced))
-                    }
                 } header: {
-                    Text("Free Duration & Color").foregroundColor(Color(hex: freeHex))
+                    Text("休憩の時間").foregroundColor(.white)
                 }
 
                 Section {
                     Toggle(isOn: $alertInWork) {
                         HStack {
-                            Image(systemName: "bell.fill").foregroundColor(.orange)
-                            Text("Alert at Work target")
+                            Image(systemName: "bell.fill").foregroundColor(.white)
+                            Text("Work目標達成時に通知")
                         }
                     }
                 } header: {
-                    Text("Notifications").foregroundColor(.gray)
+                    Text("通知設定").foregroundColor(.white)
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
             .preferredColorScheme(.dark)
+            .foregroundColor(.white)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.fontWeight(.bold)
+                    Button("完了") { dismiss() }.fontWeight(.bold).foregroundColor(.white)
                 }
             }
         }
@@ -713,8 +688,9 @@ struct SettingsView: View {
 // ──────────────────────────────────────────────
 
 struct HistoryView: View {
-    @Environment(\.dismiss) private var dismiss
     @Binding var records: [SessionRecord]
+    var onDismiss: () -> Void
+    @State private var editMode: EditMode = .inactive
     
     // Aggregation logic for chart
     struct DailyTotal: Identifiable {
@@ -757,7 +733,7 @@ struct HistoryView: View {
                                 Text("今月の Work 合計").font(.caption).foregroundColor(.gray)
                                 Text(formatSeconds(monthlyWorkTotal))
                                     .font(.title.bold())
-                                    .foregroundColor(.indigo)
+                                    .foregroundColor(.white)
                             }
                             Spacer()
                             Image(systemName: "chart.bar.fill").foregroundColor(.gray)
@@ -769,7 +745,7 @@ struct HistoryView: View {
                                     x: .value("Day", item.day),
                                     y: .value("Seconds", item.seconds)
                                 )
-                                .foregroundStyle(.indigo.gradient)
+                                .foregroundStyle(Color.green.gradient)
                             }
                             .frame(height: 100)
                             .chartXAxis {
@@ -781,7 +757,7 @@ struct HistoryView: View {
                     }
                     .padding(.vertical, 8)
                 } header: {
-                    Text("Monthly Statistics")
+                    Text("月間統計")
                 }
 
                 if records.isEmpty {
@@ -790,26 +766,21 @@ struct HistoryView: View {
                         Image(systemName: "calendar.badge.exclamationmark")
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
-                        Text("No sessions recorded yet.")
+                        Text("履歴がありません")
                             .foregroundColor(.secondary)
                     }
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
                 } else {
-                    Section("履歴・メモ") {
+                    Section("Work 履歴") {
                         ForEach($records) { $r in
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: r.mode.icon)
-                                                .font(.caption)
-                                            Text(r.mode.rawValue)
-                                                .fontWeight(.bold)
-                                        }
-                                        .foregroundColor(r.mode.color)
-                                        
                                         Text(r.date, style: .date)
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                        Text(r.date, style: .time)
                                             .font(.caption2)
                                             .foregroundColor(.gray)
                                     }
@@ -819,7 +790,7 @@ struct HistoryView: View {
                                         .foregroundColor(.white)
                                 }
                                 
-                                TextField("メモを追加...", text: $r.notes)
+                                TextField("メモ...", text: $r.notes)
                                     .font(.caption)
                                     .padding(8)
                                     .background(Color.white.opacity(0.05))
@@ -831,13 +802,24 @@ struct HistoryView: View {
                     }
                 }
             }
-            .navigationTitle("History & Calendar")
+            .navigationTitle("カレンダー")
             .navigationBarTitleDisplayMode(.inline)
             .preferredColorScheme(.dark)
+            .environment(\.editMode, $editMode)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { EditButton() }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: {
+                        editMode = (editMode == .inactive) ? .active : .inactive
+                    }) {
+                        Image(systemName: editMode == .inactive ? "pencil.circle" : "checkmark.circle.fill")
+                            .foregroundColor(.white)
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }.fontWeight(.bold)
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                    }
                 }
             }
         }
