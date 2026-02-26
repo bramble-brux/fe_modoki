@@ -188,11 +188,14 @@ class TimerManager {
 
     func handleBackgroundTransition() {
         backgroundDate = Date()
-        stopFreeAlertTimer()  // BG中はタイマーでのアラートは不要
+        stopFreeAlertTimer()  // BG中はフォアグラウンドアラートは不要
 
         if phase == .running && !isOvertime {
             let remaining = target - elapsed
             NotificationManager.shared.scheduleBackgroundNotification(mode: mode, remainingSeconds: remaining)
+        } else if mode == .free && phase == .alerting {
+            // すでにFree超過中にバックグラウンドへ → 10秒間隔のBG通知を予約
+            NotificationManager.shared.scheduleFreeOvertimeBackgroundNotifications()
         }
     }
 
@@ -201,7 +204,7 @@ class TimerManager {
         let diff = Int(Date().timeIntervalSince(bgDate))
         backgroundDate = nil
 
-        NotificationManager.shared.cancelBackgroundNotification()
+        NotificationManager.shared.cancelBackgroundNotifications()
 
         guard phase == .running || phase == .alerting else { return }
 
@@ -214,12 +217,12 @@ class TimerManager {
                 stopTimer()
                 NotificationManager.shared.playAlert()
                 NotificationManager.shared.notifyFreeOvertime(minutesOver: 0)
-                startFreeAlertTimer()  // FG復帰時にアラート再開
+                startFreeAlertTimer()
             } else if mode == .work && elapsed >= target && !workNotificationSent {
                 workNotificationSent = true
             }
         } else if phase == .alerting {
-            // BG中もalertingだった場合、FG復帰でアラート再開
+            // BG中もalertingだった場合、FG復帰でフォアグラウンドアラート再開
             NotificationManager.shared.playAlert()
             startFreeAlertTimer()
         }
