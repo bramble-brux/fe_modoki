@@ -194,7 +194,7 @@ struct ContentView: View {
                 Spacer()
 
                 // ─── Version ───
-                Text("v1.8.0")
+                Text("v1.8.1")
                     .font(.caption2)
                     .foregroundColor(.gray.opacity(0.4))
                     .padding(.bottom, 8)
@@ -536,24 +536,67 @@ struct SettingsView: View {
     @Binding var alertInWork: Bool
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
-                Section("Work Duration") {
-                    Stepper("Minutes: \(workMin)", value: $workMin, in: 0...120)
-                    Stepper("Seconds: \(workSec)", value: $workSec, in: 0...59)
+                Section {
+                    HStack {
+                        Image(systemName: "dumbbell.fill").foregroundColor(.indigo)
+                        Text("Minutes")
+                        Spacer()
+                        Picker("", selection: $workMin) {
+                            ForEach(0...120, id: \.self) { Text("\($0)").tag($0) }
+                        }.pickerStyle(.menu)
+                    }
+                    HStack {
+                        Image(systemName: "clock").foregroundColor(.indigo)
+                        Text("Seconds")
+                        Spacer()
+                        Picker("", selection: $workSec) {
+                            ForEach(0...59, id: \.self) { Text("\($0)").tag($0) }
+                        }.pickerStyle(.menu)
+                    }
+                } header: {
+                    Text("Work Duration").foregroundColor(.indigo)
                 }
-                Section("Free Duration") {
-                    Stepper("Minutes: \(freeMin)", value: $freeMin, in: 0...120)
-                    Stepper("Seconds: \(freeSec)", value: $freeSec, in: 0...59)
+
+                Section {
+                    HStack {
+                        Image(systemName: "gamecontroller.fill").foregroundColor(.mint)
+                        Text("Minutes")
+                        Spacer()
+                        Picker("", selection: $freeMin) {
+                            ForEach(0...120, id: \.self) { Text("\($0)").tag($0) }
+                        }.pickerStyle(.menu)
+                    }
+                    HStack {
+                        Image(systemName: "clock").foregroundColor(.mint)
+                        Text("Seconds")
+                        Spacer()
+                        Picker("", selection: $freeSec) {
+                            ForEach(0...59, id: \.self) { Text("\($0)").tag($0) }
+                        }.pickerStyle(.menu)
+                    }
+                } header: {
+                    Text("Free Duration").foregroundColor(.mint)
                 }
-                Section("Notifications") {
-                    Toggle("Alert at Work target", isOn: $alertInWork)
+
+                Section {
+                    Toggle(isOn: $alertInWork) {
+                        HStack {
+                            Image(systemName: "bell.fill").foregroundColor(.orange)
+                            Text("Alert at Work target")
+                        }
+                    }
+                } header: {
+                    Text("Notifications").foregroundColor(.gray)
                 }
             }
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .preferredColorScheme(.dark)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done") { dismiss() }.fontWeight(.bold)
                 }
             }
         }
@@ -569,35 +612,52 @@ struct HistoryView: View {
     @Binding var records: [SessionRecord]
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 if records.isEmpty {
-                    Text("No sessions recorded yet.")
-                        .foregroundColor(.secondary)
+                    VStack(spacing: 20) {
+                        Spacer().frame(height: 40)
+                        Image(systemName: "calendar.badge.exclamationmark")
+                            .font(.system(size: 48))
+                            .foregroundColor(.gray)
+                        Text("No sessions recorded yet.")
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
                 } else {
                     ForEach(records) { r in
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(r.mode.rawValue)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(r.mode.color)
+                                HStack(spacing: 6) {
+                                    Image(systemName: r.mode.icon)
+                                        .font(.caption)
+                                    Text(r.mode.rawValue)
+                                        .fontWeight(.bold)
+                                }
+                                .foregroundColor(r.mode.color)
+                                
                                 Text(r.date, style: .date)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
                             }
                             Spacer()
                             Text(r.formattedDuration)
                                 .font(.system(.body, design: .monospaced))
+                                .foregroundColor(.white)
                         }
+                        .padding(.vertical, 4)
                     }
                     .onDelete { records.remove(atOffsets: $0) }
                 }
             }
             .navigationTitle("History")
+            .navigationBarTitleDisplayMode(.inline)
+            .preferredColorScheme(.dark)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { EditButton() }
+                ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
+                    Button("Close") { dismiss() }.fontWeight(.bold)
                 }
             }
         }
