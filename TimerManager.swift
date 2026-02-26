@@ -13,7 +13,7 @@ class TimerManager {
     // 内部
     var backgroundDate: Date? = nil
     private var workNotificationSent = false
-    private var lastFreeOvertimeMinute: Int = -1
+    private var freeOvertimeSeconds: Int = 0
     private var timer: Timer? = nil
     private var freeAlertTimer: Timer? = nil  // Free超過中のアラート繰り返し用
 
@@ -48,7 +48,7 @@ class TimerManager {
         self.target = settings.targetSeconds(for: mode)
         self.sessionWorkSeconds = 0
         self.workNotificationSent = false
-        self.lastFreeOvertimeMinute = -1
+        self.freeOvertimeSeconds = 0
         stopFreeAlertTimer()
         startTimer()
     }
@@ -83,7 +83,7 @@ class TimerManager {
         self.target = settings.targetSeconds(for: newMode)
         self.phase = .running
         self.workNotificationSent = false
-        self.lastFreeOvertimeMinute = -1
+        self.freeOvertimeSeconds = 0
 
         startTimer()
     }
@@ -157,25 +157,24 @@ class TimerManager {
         }
     }
 
-    // MARK: - Free超過アラート（アプリ起動中ずっと鳴り続ける）
+    // MARK: - Free超過アラート（アプリ起動中、10秒ごとにアラート＋通知）
 
     private func startFreeAlertTimer() {
         stopFreeAlertTimer()
-        lastFreeOvertimeMinute = 0
-        // 3秒ごとにアラート音を鳴らし、1分ごとに通知も出す
-        freeAlertTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+        freeOvertimeSeconds = 0
+        // 10秒ごとにアラート音＋通知を繰り返す
+        freeAlertTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             guard let self = self, self.phase == .alerting else {
                 self?.stopFreeAlertTimer()
                 return
             }
+            self.freeOvertimeSeconds += 10
             NotificationManager.shared.playAlert()
-
-            // 1分（20回 × 3秒 = 60秒）ごとに通知も追加
-            self.lastFreeOvertimeMinute += 3
-            if self.lastFreeOvertimeMinute >= 60 {
-                self.lastFreeOvertimeMinute = 0
-                let minutesOver = max(1, (self.elapsed - self.target + 59) / 60)
+            let minutesOver = self.freeOvertimeSeconds / 60
+            if minutesOver > 0 {
                 NotificationManager.shared.notifyFreeOvertime(minutesOver: minutesOver)
+            } else {
+                NotificationManager.shared.notifyFreeOvertime(minutesOver: 0)
             }
         }
     }
