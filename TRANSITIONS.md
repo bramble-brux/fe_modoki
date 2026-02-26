@@ -1,42 +1,48 @@
-# 状態遷移図 - v1.8.0
+# 状態遷移図 - v2.0.0
 
 ## 遷移図
 
 ```mermaid
 graph TD
-    Start((アプリ起動)) --> Idle[Idle: 開始モード選択]
-    Idle -->|Work選択| WorkRun[Work: カウントダウン中]
-    Idle -->|Free選択| FreeRun[Free: カウントダウン中]
+    StartView[開始画面] -->|Workボタン| WorkTimer[Work: カウントダウン]
+    StartView -->|Freeボタン| FreeTimer[Free: カウントダウン]
+    StartView -->|カレンダー| CalendarView[カレンダー・統計]
+    StartView -->|設定| SettingsView[設定画面]
 
-    WorkRun -->|ボタン or 通知操作| Record1[セッション記録]
-    Record1 --> FreeRun
-
-    WorkRun -->|目標到達| WorkOver[Work: 延長計測中 / グリーン]
-    WorkOver -->|ボタン or 通知操作| Record1
-
-    FreeRun -->|目標到達| FreeAlert[Free: アラート鳴動中 / 赤]
-    FreeAlert -->|ボタン or 通知操作| Record2[セッション記録]
-    Record2 --> WorkRun
-
-    WorkRun -->|終了ボタン| Finish[セッション完了: 合計表示]
-    WorkOver -->|終了ボタン| Finish
-    FreeRun -->|終了ボタン| Finish
-    FreeAlert -->|終了ボタン| Finish
+    WorkTimer -->|一時停止| WorkPaused[Work: 一時停止]
+    WorkPaused -->|再開| WorkTimer
     
-    Finish -->|続行ボタン| Idle
+    WorkTimer -->|目標到達| WorkOver[Work: 超過カウントアップ]
+    WorkTimer -->|Freeへ| RecordW[記録保存]
+    WorkOver -->|Freeへ| RecordW
+    RecordW --> FreeTimer
+
+    FreeTimer -->|一時停止| FreePaused[Free: 一時停止]
+    FreePaused -->|再開| FreeTimer
+
+    FreeTimer -->|目標到達| FreeAlert[Free: 超過アラート停止]
+    FreeTimer -->|Workへ| RecordF[記録保存]
+    FreeAlert -->|Workへ| RecordF
+    RecordF --> WorkTimer
+
+    WorkTimer -->|終了| ResultView[完了画面]
+    WorkOver -->|終了| ResultView
+    FreeTimer -->|終了| ResultView
+    FreeAlert -->|終了| ResultView
+
+    ResultView -->|スタートに戻る| StartView
 ```
 
-## 状態一覧
+## 状態詳細
 
-| 状態 | モード | 表示 | 色（Text/Icon） | アラート |
-|------|--------|------|-----------------|----------|
-| カウントダウン中 | Work | 残り時間 | 白 | なし |
-| 延長計測中 | Work | 超過時間 | グリーン | 単発(Option) |
-| カウントダウン中 | Free | 残り時間 | 白 | なし |
-| アラート鳴動中 | Free | 0:00 | 赤 | 継続鳴動 |
+| 画面/状態 | アイコン | 計測方式 | ボタン構成 (大 / 小) |
+|-----------|----------|----------|----------------------|
+| Work(通常) | ダンベル | 減算 | Freeへ / 一時停止, 終了 |
+| Work(超過) | ダンベル | 加算 | Freeへ / 一時停止, 終了 |
+| Free(通常) | コントローラー | 減算 | Workへ / 一時停止, 終了 |
+| Free(超過) | コントローラー | 停止(0:00) | Workへ / 終了 |
 
-## 遷移ルール
+## 特記事項
 
-1. **ボタン/通知押下時**: セッションを記録 → 反対モードへ移行 → 自動スタート。
-2. **ロック画面**: 通知アクション「STOP / 次へ」によりアプリを開かずにモード移行可能。
-3. **セッション終了**: 右上の「終了」ボタンで、それまでの Work 合計時間を算出し完了画面へ。
+1. **記録のタイミング**: モード切り替え時（Freeへ/Workへ）および最終的な「終了」ボタン押下時に、実施したWork時間がカレンダーDBへ蓄積される。
+2. **通知の連動**: バックグラウンド移行時に、次の状態変化（目標到達）に合わせて通知を予約。Free超過時は、さらに1分間隔のローカル通知を動的にスケジュールする。
